@@ -1,0 +1,13 @@
+{
+  "name": "flightdeck",
+  "owner": {
+    "name": "Flightdeck contributors"
+  },
+  "plugins": [
+    {
+      "name": "flightdeck",
+      "source": "./"
+    }
+  ],
+  "description": "Flightdeck: a minimal developer HUD for Claude Code."
+}

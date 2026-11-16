@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="973" height="392" viewBox="0 0 973 392" role="img" aria-label="Flightdeck · diff viewer">
+<rect width="100%" height="100%" rx="10" fill="#0d1117"/>
+<rect width="100%" height="28" rx="10" fill="#161b22"/>
+<rect y="18" width="100%" height="10" fill="#161b22"/>
+<circle cx="18" cy="14" r="5.5" fill="#ff5f57"/>
+<circle cx="36" cy="14" r="5.5" fill="#febc2e"/>
+<circle cx="54" cy="14" r="5.5" fill="#28c840"/>
+<text x="486" y="18" fill="#8b8f96" font-size="12" text-anchor="middle" font-family="ui-sans-serif, -apple-system, Segoe UI, sans-serif">Flightdeck · diff viewer</text>
+<g font-family="JetBrains Mono, SFMono-Regular, Menlo, Consolas, monospace" font-size="14">
+<text x="16.0" y="47.0" fill="#3a3f47" textLength="940.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮</text>
+<text x="16.0" y="65.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="32.8" y="65.0" fill="#d97757" font-weight="700" textLength="252.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Changes · Added token rotation</text>
+<text x="872.8" y="65.0" fill="#8b8f96" textLength="58.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">✕ Close</text>
+<text x="948.4" y="65.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="32.8" y="70.0" width="117.6" height="18" fill="#d6d6d6"/>
+<text x="16.0" y="83.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="41.2" y="83.0" fill="#0d1117" font-weight="700" textLength="100.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">M session.ts</text>
+<text x="167.2" y="83.0" fill="#e5c07b" font-weight="700" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">M</text>
+<text x="184.0" y="83.0" fill="#d6d6d6" textLength="75.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">tokens.ts</text>
+<text x="284.8" y="83.0" fill="#86c986" font-weight="700" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">A</text>
+<text x="301.6" y="83.0" fill="#d6d6d6" textLength="126.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">refresh.test.ts</text>
+<text x="452.8" y="83.0" fill="#8ab4f8" font-weight="700" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">R</text>
+<text x="469.6" y="83.0" fill="#d6d6d6" textLength="100.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">apiClient.ts</text>
+<text x="948.4" y="83.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="101.0" fill="#3a3f47" textLength="940.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│ ──────────────────────────────────────────────────────────────────────────────────────────────────────────── │</text>
+<text x="16.0" y="119.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="32.8" y="119.0" fill="#e5c07b" font-weight="700" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">M</text>
+<text x="49.6" y="119.0" fill="#8ab4f8" textLength="84.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">api-server</text>
+<text x="142.0" y="119.0" fill="#8b8f96" textLength="176.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">› src/auth/session.ts</text>
+<text x="872.8" y="119.0" fill="#8b8f96" textLength="67.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">modified</text>
+<text x="948.4" y="119.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="137.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="74.8" y="137.0" fill="#8b8f96" font-weight="700" textLength="50.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">Before</text>
+<text x="528.4" y="137.0" fill="#8b8f96" font-weight="700" textLength="42.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">After</text>
+<text x="948.4" y="137.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="155.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="32.8" y="155.0" fill="#8ab4f8" textLength="126.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@@ line 12 → 12</text>
+<text x="948.4" y="155.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="173.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="41.2" y="173.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">12</text>
+<text x="74.8" y="173.0" fill="#8b8f96" textLength="386.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export async function refresh(token: string) {</text>
+<text x="494.8" y="173.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">12</text>
+<text x="528.4" y="173.0" fill="#8b8f96" textLength="386.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export async function refresh(token: string) {</text>
+<text x="948.4" y="173.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="191.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="41.2" y="191.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">13</text>
+<text x="91.6" y="191.0" fill="#8b8f96" textLength="352.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">const session = await sessions.find(token)</text>
+<text x="494.8" y="191.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">13</text>
+<text x="545.2" y="191.0" fill="#8b8f96" textLength="352.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">const session = await sessions.find(token)</text>
+<text x="948.4" y="191.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="74.8" y="196.0" width="386.4" height="18" fill="#4b2330"/>
+<rect x="528.4" y="196.0" width="302.4" height="18" fill="#21432a"/>
+<text x="16.0" y="209.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="41.2" y="209.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">14</text>
+<text x="66.4" y="209.0" fill="#e58080" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">-</text>
+<text x="91.6" y="209.0" fill="#d6d6d6" textLength="369.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">if (!session) throw new AuthError(&quot;expired&quot;)</text>
+<text x="494.8" y="209.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">14</text>
+<text x="520.0" y="209.0" fill="#86c986" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+</text>
+<text x="545.2" y="209.0" fill="#d6d6d6" textLength="285.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">if (!session || session.revoked) {</text>
+<text x="948.4" y="209.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="74.8" y="214.0" width="201.6" height="18" fill="#4b2330"/>
+<rect x="528.4" y="214.0" width="285.6" height="18" fill="#21432a"/>
+<text x="16.0" y="227.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="41.2" y="227.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">15</text>
+<text x="66.4" y="227.0" fill="#e58080" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">-</text>
+<text x="91.6" y="227.0" fill="#d6d6d6" textLength="184.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">return session.issue()</text>
+<text x="494.8" y="227.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">15</text>
+<text x="520.0" y="227.0" fill="#86c986" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+</text>
+<text x="562.0" y="227.0" fill="#d6d6d6" textLength="252.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">throw new AuthError(&quot;expired&quot;)</text>
+<text x="948.4" y="227.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="528.4" y="232.0" width="25.2" height="18" fill="#21432a"/>
+<text x="16.0" y="245.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="494.8" y="245.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">16</text>
+<text x="520.0" y="245.0" fill="#86c986" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+</text>
+<text x="545.2" y="245.0" fill="#d6d6d6" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">}</text>
+<text x="948.4" y="245.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="528.4" y="250.0" width="210.0" height="18" fill="#21432a"/>
+<text x="16.0" y="263.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="494.8" y="263.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">17</text>
+<text x="520.0" y="263.0" fill="#86c986" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+</text>
+<text x="545.2" y="263.0" fill="#d6d6d6" textLength="193.2" lengthAdjust="spacingAndGlyphs" xml:space="preserve">return session.rotate()</text>
+<text x="948.4" y="263.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="281.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="41.2" y="281.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">16</text>
+<text x="74.8" y="281.0" fill="#8b8f96" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">}</text>
+<text x="494.8" y="281.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">18</text>
+<text x="528.4" y="281.0" fill="#8b8f96" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">}</text>
+<text x="948.4" y="281.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="299.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="32.8" y="299.0" fill="#8ab4f8" textLength="126.0" lengthAdjust="spacingAndGlyphs" xml:space="preserve">@@ line 40 → 44</text>
+<text x="948.4" y="299.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="317.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="41.2" y="317.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">40</text>
+<text x="74.8" y="317.0" fill="#8b8f96" textLength="302.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export function logout(id: string) {</text>
+<text x="494.8" y="317.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">44</text>
+<text x="528.4" y="317.0" fill="#8b8f96" textLength="302.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">export function logout(id: string) {</text>
+<text x="948.4" y="317.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<rect x="74.8" y="322.0" width="151.2" height="18" fill="#4b2330"/>
+<rect x="528.4" y="322.0" width="176.4" height="18" fill="#21432a"/>
+<text x="16.0" y="335.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="41.2" y="335.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">41</text>
+<text x="66.4" y="335.0" fill="#e58080" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">-</text>
+<text x="91.6" y="335.0" fill="#d6d6d6" textLength="134.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">cache.delete(id)</text>
+<text x="494.8" y="335.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">45</text>
+<text x="520.0" y="335.0" fill="#86c986" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">+</text>
+<text x="545.2" y="335.0" fill="#d6d6d6" textLength="159.6" lengthAdjust="spacingAndGlyphs" xml:space="preserve">sessions.revoke(id)</text>
+<text x="948.4" y="335.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="353.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="41.2" y="353.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">42</text>
+<text x="74.8" y="353.0" fill="#8b8f96" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">}</text>
+<text x="494.8" y="353.0" fill="#8b8f96" textLength="16.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">46</text>
+<text x="528.4" y="353.0" fill="#8b8f96" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">}</text>
+<text x="948.4" y="353.0" fill="#3a3f47" textLength="8.4" lengthAdjust="spacingAndGlyphs" xml:space="preserve">│</text>
+<text x="16.0" y="371.0" fill="#3a3f47" textLength="940.8" lengthAdjust="spacingAndGlyphs" xml:space="preserve">╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯</text>
+</g></svg>
