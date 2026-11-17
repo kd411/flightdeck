@@ -13,13 +13,14 @@ import {
 } from '../hooks/lib'
 import { parseNameStatus, parseNumstat } from '../hooks/engine'
 import { addDiff, hunksOfNewFile, hunksOfUnified, sideBySide } from '../hooks/diff'
+import { movedTop } from '../hooks/viewer'
 
 const PANE = {
   plugin: 'flightdeck',
   component: 'Pane',
   requestId: 'flightdeck',
   props: {
-    title: 'Control panel',
+    title: 'Flightdeck',
     isFocused: false,
     bodyColumns: 44,
     placement: 'dock',
@@ -215,18 +216,27 @@ test('diffs are laid out side by side', () => {
   expect(merged[0]?.hunks.length).toBe(2)
 })
 
-test('the eye opens a side-by-side diff in the chat', async ($, on) => {
+const BAND = {
+  plugin: 'flightdeck',
+  component: 'AbovePrompt',
+  requestId: 'band',
+  props: {
+    hasSurvey: false,
+    isCollapsed: false,
+    isWorking: false,
+    maxRows: 20,
+    bodyColumns: 100,
+    scroll: { offset: 0, bodyRows: 19 },
+    view: {},
+  },
+} as const
+
+test('the eye opens a side-by-side diff in the band above the prompt', async ($, on) => {
   mock.clock(on)
   on('fs.exists', (_, e) => ({ value: e.path === '/work/api-server/.git' }))
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('turn.complete', (_, e) => ({ text: e.answer }))
   on('tool.call', () => ({ result: EDIT_RESULT }))
-  const placed: string[] = []
-  on('ui.place', (_, e) => {
-    placed.push(e.id)
-
-    return { value: { isPlaced: true, requestId: e.id } }
-  })
   on('ui.scroll', () => ({}))
 
   await $.turn.start({ text: 'edit', turnId: 'd1' })
@@ -244,26 +254,189 @@ test('the eye opens a side-by-side diff in the chat', async ($, on) => {
     reason: 'answer',
   })
 
+  const quiet = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await quiet.find({ type: 'Text', text: /Before/ })).toBeUndefined()
+  await quiet.unmount()
+
   const panel = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await panel.press({ key: 't-d1' })
   expect(await panel.find({ type: 'Text', text: /1 modified/ })).toBeDefined()
   await panel.press({ key: 'v-d1' })
   await panel.unmount()
-  expect(placed.length).toBe(1)
 
-  const row = await $.ui.mount({
-    plugin: 'flightdeck',
-    component: 'Placed',
-    requestId: placed[0] ?? '',
-    surface: 'terminal',
-    props: { id: placed[0] ?? '', plugin: 'flightdeck' },
-  })
+  const row = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await row.find({ type: 'Text', text: /Before/ })).toBeDefined()
   expect(await row.find({ type: 'Text', text: /^old$/ })).toBeDefined()
   expect(await row.find({ type: 'Text', text: /^new$/ })).toBeDefined()
+  await row.press({ key: 'diff-f0' })
+  expect(await row.find({ type: 'Text', text: /^new$/ })).toBeDefined()
+  expect(await row.find({ type: 'Text', text: /rows 1–/ })).toBeDefined()
   await row.press({ key: 'diff-close' })
   expect(await row.find({ type: 'Text', text: /Before/ })).toBeUndefined()
   await row.unmount()
+})
+
+test('the viewer scrolls its code rows under a header that stays put', async ($, on) => {
+  mock.clock(on)
+  on('fs.exists', (_, e) => ({ value: e.path === '/work/api-server/.git' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  const long = Array.from({ length: 40 }, (_, i) => `+line ${i + 1}`)
+  on('tool.call', () => ({
+    result: { filePath: '/work/api-server/big.ts', structuredPatch: [{ lines: long }] },
+  }))
+
+  await $.turn.start({ text: 'edit', turnId: 'd2' })
+  await $.tool.call({ tool: 'Edit', file_path: '/work/api-server/big.ts', old_string: 'a', new_string: 'b' })
+  await $.turn.complete({ turnId: 'd2', answer: 'Grew it.', durationMs: 10, isAborted: false, reason: 'answer' })
+
+  const panel = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await panel.press({ key: 'v-d2' })
+  await panel.unmount()
+
+  const row = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await row.find({ type: 'Text', text: /rows 1–11 of 41/ })).toBeDefined()
+  expect(movedTop(0, 3, 41, 12)).toBe(3)
+  expect(movedTop(5, -9, 41, 12)).toBe(0)
+  expect(movedTop(0, 500, 41, 11)).toBe(30)
+  expect(await row.find({ type: 'Text', text: /Before/ })).toBeDefined()
+  expect(await row.find({ type: 'Text', text: /^line 10$/ })).toBeDefined()
+  expect(await row.find({ type: 'Text', text: /^line 11$/ })).toBeUndefined()
+  await row.unmount()
+})
+
+test('a shell script draws one compact row, and ctrl+o the full one', async $ => {
+  const script = {
+    plugin: 'flightdeck',
+    component: 'ToolUse',
+    requestId: 'sh1',
+    surface: 'terminal',
+    props: {
+      tool: 'Bash',
+      input: { command: "python3 - <<'EOF'\nprint(1)\nEOF", description: 'Patch the viewer' },
+      isRunning: false,
+      isErrored: false,
+      isInterrupted: false,
+    },
+  } as never
+  const ui = await $.ui.mount(script)
+  expect(await ui.find({ type: 'Text', text: /^Patch the viewer$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /no files changed/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /print\(1\)/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a shell command that changes files lists each with its line counts', async ($, on) => {
+  on('fs.exists', (_, e) => ({ value: e.path === '/work/api-server/.git' }))
+  const output = {
+    stdout: 'patched',
+    stderr: '',
+    interrupted: false,
+    bashEditDiff: {
+      files: [
+        {
+          filePath: '/work/api-server/src/a.ts',
+          hunks: [{ oldStart: 1, oldLines: 2, newStart: 1, newLines: 3, lines: [' keep', '-old', '+new', '+more'] }],
+        },
+        {
+          filePath: '/work/api-server/src/b.ts',
+          created: true,
+          hunks: [{ oldStart: 0, oldLines: 0, newStart: 1, newLines: 1, lines: ['+fresh'] }],
+        },
+      ],
+      moreFiles: 0,
+    },
+  }
+  const row = await $.ui.mount({
+    plugin: 'flightdeck',
+    component: 'ToolUse',
+    requestId: 'sh2',
+    surface: 'terminal',
+    props: {
+      tool: 'Bash',
+      input: { command: 'sed -i s/old/new/ src/a.ts', description: 'Rename old to new' },
+      output,
+      isRunning: false,
+      isErrored: false,
+      isInterrupted: false,
+    },
+  } as never)
+  expect(await row.find({ type: 'Text', text: /^Rename old to new$/ })).toBeDefined()
+  expect(await row.find({ type: 'Text', text: /src\/a\.ts/ })).toBeDefined()
+  expect(await row.find({ type: 'Text', text: /^\+2$/ })).toBeDefined()
+  expect(await row.find({ type: 'Text', text: /^ −1$/ })).toBeDefined()
+  expect(await row.find({ type: 'Text', text: /^ new$/ })).toBeDefined()
+  await row.unmount()
+})
+
+test('the panel is headed Flightdeck, with the session directory under it', async ($, on) => {
+  mock.clock(on)
+  on('session.cwd', () => ({ value: '/home/pat/projects/api-server' }))
+  on('env.get', (_, e) => ({ value: e.name === 'HOME' ? '/home/pat' : undefined }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^Flightdeck$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^~\/projects\/api-server$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the docked panel draws every section at 30, 44 and 60 columns', async ($, on) => {
+  mock.clock(on)
+  for (const bodyColumns of [30, 44, 60]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' })
+    for (const heading of [/^Flightdeck$/, /^SESSION/, /^CONTEXT/, /^CHAT HISTORY$/, /^EXTENSIONS$/]) {
+      expect(await ui.find({ type: 'Text', text: heading })).toBeDefined()
+    }
+    await ui.unmount()
+  }
+})
+
+test('extensions count the tokens their calls bring in', async ($, on) => {
+  mock.clock(on)
+  on('command.register', () => ({ value: { command: 'flightdeck' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('tool.call', () => ({ result: 'x'.repeat(4000) }))
+
+  on('tool.list', () => ({ value: [] }))
+  on('command.list', () => ({ value: [] }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+
+  await $.tool.call({ tool: 'mcp__github__get_issue', tool_use_id: 'm1' } as never)
+  // A reload starts the session over: what it reads again must keep the totals.
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: false })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'x-mcp' })
+  expect(await ui.find({ type: 'Text', text: /^ +1k$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ +1 calls$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test("a skill's instructions count for it, and nothing after its turn does", async ($, on) => {
+  mock.clock(on)
+  mock.session(on)
+  on('command.register', () => ({ value: { command: 'flightdeck' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('tool.call', () => ({ result: '' }))
+  const instructions = (uuid: string) =>
+    ({
+      door: 'tool-message',
+      origin: { kind: 'tool', tool: 'Skill' },
+      uuid,
+      message: { type: 'user', role: 'user', isMeta: true, content: [{ type: 'text', text: 'x'.repeat(400) }] },
+    }) as never
+
+  await $.turn.start({ text: 'chart it', turnId: 's1' })
+  await $.tool.call({ tool: 'Skill', skill: 'dataviz', tool_use_id: 'k1' } as never)
+  await $.session.append(instructions('i1'))
+  await $.turn.start({ text: 'next', turnId: 's2' })
+  await $.session.append(instructions('i2'))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'x-skill' })
+  expect(await ui.find({ type: 'Text', text: /^ +100$/ })).toBeDefined()
+  await ui.unmount()
 })
 
 test('the effort in force is read from the settings for the session model', async ($, on) => {
@@ -284,7 +457,12 @@ test('the effort in force is read from the settings for the session model', asyn
   }))
 
   await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
-  const debug = await $.command.run({ command: 'flightdeck', args: 'debug' })
+  const debug = await $.command.run({
+    command: 'flightdeck',
+    args: 'debug',
+    origin: { kind: 'composer' },
+    presentation: { isFullscreen: true, columns: 120 },
+  })
   expect(debug.text).toContain('effort in force: medium (from model settings)')
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^ med(ium)? $/ })).toBeDefined()

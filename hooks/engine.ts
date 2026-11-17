@@ -1,12 +1,13 @@
 // Everything that asks the engine for something: reading the session's
 // figures, changing the model or effort, finding a file's repository,
-// scrolling the chat, and reading what changed in the working tree.
+// jumping to a response, and reading what changed in the working tree.
 // Each read is guarded: a figure the engine cannot give is left as it was.
 
 import type { EngineInterface } from 'claude-code'
 
-import type { Category, ChangeKind, DiffFile, ExtKind, FileChange, Turn } from '../types'
+import type { Category, ChangeKind, DiffFile, ExtKind, FileChange } from '../types'
 import { capHunks, hunksOfUnified } from './diff'
+import { band } from './viewer'
 import {
   basename,
   classify,
@@ -14,7 +15,14 @@ import {
   normalize,
   relative,
 } from './lib'
-import { changeBreakdown, changeControls, changeExtensions, changeMeter, changeTurns, changeView, changeDiffView } from './state'
+import {
+  changeBreakdown,
+  changeControls,
+  changeDiffView,
+  changeExtensions,
+  changeMeter,
+  changeView,
+} from './state'
 
 type Engine = EngineInterface
 
@@ -243,8 +251,10 @@ export async function loadAvailable($: Engine): Promise<void> {
       names.plugin.add(command.plugin)
     }
   }
+  // Spread what is there: the counts and token totals outlive a reload,
+  // which runs this again.
   await changeExtensions($, old => ({
-    used: old.used,
+    ...old,
     available: {
       connector: names.connector.size,
       plugin: names.plugin.size,
@@ -557,23 +567,13 @@ export async function gitDiff(
   }
 }
 
-let opened = 0
-
 /**
- * Opens the diff viewer for one response: a new row at the end of the chat,
- * scrolled into view. Each open is a new row, so it lands where the person
- * is reading; the rows of earlier opens draw nothing.
+ * Opens the diff viewer for one response in the band above the prompt: a
+ * box of its own, scrolled by the wheel, so the chat never moves under it.
  */
 export async function openViewer($: Engine, turn: string): Promise<void> {
-  opened += 1
-  const row = `diff-${(await attempt(() => $.clock.now())) ?? 0}-${opened}`
-  await changeDiffView($, () => ({ row, turn, file: 0, page: 0 }))
-  const placed = await attempt(() => $.ui.place({ id: row }))
-  if (placed === undefined || !placed.isPlaced) {
-    $.ui.toast('Flightdeck: the diff viewer could not open here')
-
-    return
+  await changeDiffView($, () => ({ turn, file: 0, top: 0 }))
+  if (band.isCollapsed) {
+    $.ui.toast('Flightdeck: the band above the prompt is folded; ctrl+x ctrl+a shows the diff')
   }
-  const requestId = placed.requestId
-  await attempt(() => $.ui.scroll({ to: { requestId }, block: 'start' }))
 }

@@ -1,4 +1,4 @@
-// The control panel. One tree, sized to the columns the pane gives it, so it
+// The Flightdeck panel. One tree, sized to the columns the pane gives it, so it
 // reflows from a narrow dock to a wide one. Docked it draws every section;
 // placed inline (a narrow terminal) it draws a short glance instead.
 
@@ -66,6 +66,19 @@ function shortLevel(level: string, isTight: boolean): string {
   return isTight && level === 'medium' ? 'med' : level
 }
 
+/** The session's directory, with the home folder written as `~`. */
+async function sessionPath($: EngineInterface): Promise<string> {
+  const [cwd, home] = await Promise.all([
+    $.session.cwd().catch(() => ''),
+    $.env.get('HOME').catch(() => undefined),
+  ])
+  if (typeof home === 'string' && home !== '' && (cwd === home || cwd.startsWith(home + '/'))) {
+    return '~' + cwd.slice(home.length)
+  }
+
+  return cwd
+}
+
 export async function drawPanel($: EngineInterface, e: RenderInput<'Pane'>) {
   const { Box, Text, Button } = $.ui.resolve(e)
   const isDock = e.props.placement === 'dock'
@@ -83,6 +96,7 @@ export async function drawPanel($: EngineInterface, e: RenderInput<'Pane'>) {
     readControls($),
     $.clock.now().catch(() => 0),
   ])
+  const where = await sessionPath($)
 
   const percent = gauge.percent ?? 0
   const size = sum.input + sum.output
@@ -301,7 +315,8 @@ export async function drawPanel($: EngineInterface, e: RenderInput<'Pane'>) {
   // The frame fills the dock's height; the history takes what the other
   // sections leave, and a taller panel scrolls.
   const rows = Math.max(0, Math.floor(e.props.scroll.bodyRows))
-  const historyRows = Math.max(6, rows - 34)
+  // The header's path line takes one row of what the history could use.
+  const historyRows = Math.max(6, rows - 35)
   const shown = list.slice(-historyRows)
   const historyBlock = (
     <Box flexDirection="column">
@@ -417,7 +432,7 @@ export async function drawPanel($: EngineInterface, e: RenderInput<'Pane'>) {
     <Box flexDirection="column">
       <Box justifyContent="space-between">
         <Text dimColor>EXTENSIONS</Text>
-        <Text dimColor>{w >= 34 ? 'used this session' : ''}</Text>
+        <Text dimColor>{w >= 34 ? 'tokens'.padStart(tokW) + 'calls'.padStart(fileW + 1) : ''}</Text>
       </Box>
       {EXT_ROWS.map(row => {
         const items = ofKind(ext.used, row.kind)
@@ -427,9 +442,16 @@ export async function drawPanel($: EngineInterface, e: RenderInput<'Pane'>) {
           total !== undefined && total >= items.length && total > 0
             ? `${items.length} of ${total} used`
             : `${items.length} used`
-        const right = `${calls} ${row.unit}`
+        const spent = items.reduce(
+          (sum, item) => sum + (ext.tokens?.[`${row.kind}:${item.name}`] ?? 0),
+          0,
+        )
+        // The same two columns the chat history ends in: tokens, then a
+        // column as wide as its files one, so the figures line up.
+        const tok = fmtTokens(spent).padStart(tokW)
+        const callsText = `${calls} ${row.unit}`.padStart(fileW + 1)
         const isOpen = look.openExt === row.kind
-        const middleW = Math.max(0, w - 2 - extLabelW - right.length)
+        const middleW = Math.max(0, w - 2 - extLabelW - tokW - (fileW + 1))
 
         return (
           <Box flexDirection="column">
@@ -445,19 +467,23 @@ export async function drawPanel($: EngineInterface, e: RenderInput<'Pane'>) {
             >
               {isOpen ? '▾' : '▸'} {fit(row.label, extLabelW)}
               <Text dimColor>{fit(middle, middleW)}</Text>
-              <Text bold>{calls}</Text> {row.unit}
+              <Text>{tok}</Text>
+              <Text dimColor>{callsText}</Text>
             </Button>
             {isOpen && items.length === 0 && (
               <Text dimColor>{'    '}none used yet</Text>
             )}
             {isOpen &&
               items.map(item => (
-                <Box justifyContent="space-between">
+                <Box>
                   <Text>
                     {'    '}
-                    {clip(item.name, Math.max(6, w - 10))}
+                    {fit(item.name, Math.max(6, w - 4 - tokW - (fileW + 1)))}
                   </Text>
-                  <Text dimColor>×{item.count}</Text>
+                  <Text dimColor>
+                    {fmtTokens(ext.tokens?.[`${row.kind}:${item.name}`] ?? 0).padStart(tokW)}
+                  </Text>
+                  <Text dimColor>{`×${item.count}`.padStart(fileW + 1)}</Text>
                 </Box>
               ))}
           </Box>
@@ -476,7 +502,10 @@ export async function drawPanel($: EngineInterface, e: RenderInput<'Pane'>) {
       paddingX={1}
     >
       <Text color="claude" bold>
-        Control panel
+        Flightdeck
+      </Text>
+      <Text dimColor wrap="truncate-start">
+        {where}
       </Text>
       {rule}
       {controlsBlock}

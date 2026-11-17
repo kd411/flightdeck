@@ -185,6 +185,54 @@ export function tally(
   return next
 }
 
+/**
+ * Roughly how many tokens some content holds: its text at four characters a
+ * token. Walks strings, arrays and the `text` and `content` fields of blocks;
+ * media and other fields count nothing.
+ */
+export function estimateTokens(content: unknown): number {
+  let chars = 0
+  const walk = (value: unknown, depth: number): void => {
+    if (depth > 8) {
+      return
+    }
+    if (typeof value === 'string') {
+      chars += value.length
+    } else if (Array.isArray(value)) {
+      for (const one of value) {
+        walk(one, depth + 1)
+      }
+    } else if (value !== null && typeof value === 'object') {
+      const block = value as { text?: unknown; content?: unknown }
+      walk(block.text, depth + 1)
+      walk(block.content, depth + 1)
+    }
+  }
+  walk(content, 0)
+
+  return Math.ceil(chars / 4)
+}
+
+/** Adds `tokens` to each non-tool mark's entry in a `<kind>:<name>` tally. */
+export function addTokens(
+  counts: Readonly<Record<string, number>>,
+  marks: readonly Mark[],
+  tokens: number,
+): Record<string, number> {
+  const next = { ...counts }
+  if (tokens <= 0) {
+    return next
+  }
+  for (const mark of marks) {
+    if (mark.kind !== 'tool') {
+      const key = `${mark.kind}:${mark.name}`
+      next[key] = (next[key] ?? 0) + tokens
+    }
+  }
+
+  return next
+}
+
 /** The entries of a tally for one kind, most used first. */
 export function ofKind(
   counts: Readonly<Record<string, number>>,

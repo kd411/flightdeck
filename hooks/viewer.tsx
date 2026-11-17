@@ -1,25 +1,106 @@
-// The diff viewer: a row placed in the chat that shows one response's file
-// changes side by side, before on the left and after on the right. One file
-// at a time, picked from the tabs at the top.
+// The diff viewer: a box in the band above the prompt that shows one
+// response's file changes side by side, before on the left and after on the
+// right. One file at a time, picked from the tabs at the top.
+//
+// The band only hears the wheel while its tree is taller than it, so the
+// tree is the box (exactly the band's window) and two blank rows under it.
+// The mod takes the band's scroll events (wheel, arrows, page keys), keeps
+// the band's window at the top, and moves only the code rows inside the box,
+// under a header that stays put.
 
-import type { EngineInterface, RenderInput } from 'claude-code'
+import type { EngineInterface, RenderInput, UiScrollInput } from 'claude-code'
 
 import type { DiffFile } from '../types'
 import { plain, sideBySide } from './diff'
-import type { Side } from './diff'
+import type { Side, SideRow } from './diff'
 import { KIND_MARK, basename, clip } from './lib'
 import { changeDiffView, readDiffs, readDiffView, readTurns } from './state'
 
-/** Rows of one file drawn at once; the rest are a press away. */
-const PAGE = 120
+/** Rows the box spends on itself: border 2, title, tabs, rule, file, columns, footer. */
+const CHROME = 8
+/** The fewest code rows drawn, however short the band. */
+const MIN_BODY = 3
+/** Blank rows under the box, so the band scrolls and hears the wheel. */
+const OVERHANG = 2
+/** Code rows one wheel tick moves. */
+const TICK = 3
 
-export async function drawViewer($: EngineInterface, e: RenderInput<'Placed'>) {
+/** The band as last drawn: whether it is folded, and its code rows. */
+export const band = {
+  isCollapsed: false,
+  body: MIN_BODY,
+  total: 0,
+}
+
+/**
+ * The band's scroll while the viewer is open: moves the code rows by the
+ * person's wheel or keys and leaves the band itself where it is.
+ */
+export async function scrollViewer(
+  $: EngineInterface,
+  e: UiScrollInput,
+): Promise<boolean> {
+  const look = await readDiffView($)
+  if (look.turn === null || e.component !== 'AbovePrompt') {
+    return false
+  }
+  await changeDiffView($, old => ({
+    ...old,
+    top: movedTop(
+      old.top,
+      e.origin.kind === 'person' && Math.abs(e.by) <= 2 ? e.by * TICK : e.by,
+      band.total,
+      band.body,
+    ),
+  }))
+
+  return true
+}
+
+/** The first code row after a move of `by`, kept between the first and last page. */
+export function movedTop(top: number, by: number, total: number, body: number): number {
+  const last = Math.max(0, total - body)
+  const step = Number.isFinite(by) ? Math.trunc(by) : 0
+
+  return Math.min(last, Math.max(0, top + step))
+}
+
+/** The tabs that fit one row, keeping the picked one in view. */
+function tabWindow(
+  labels: readonly string[],
+  at: number,
+  width: number,
+): { from: number; to: number } {
+  const cost = (index: number) => (labels[index] ?? '').length + 4
+  let from = at
+  let to = at + 1
+  let used = cost(at)
+  // Room for the "‹ n" and "n ›" marks either side.
+  const room = Math.max(10, width - 8)
+  for (;;) {
+    const grew = used
+    if (to < labels.length && used + cost(to) <= room) {
+      used += cost(to)
+      to += 1
+    }
+    if (from > 0 && used + cost(from - 1) <= room) {
+      from -= 1
+      used += cost(from)
+    }
+    if (used === grew) {
+      return { from, to }
+    }
+  }
+}
+
+export async function drawViewer($: EngineInterface, e: RenderInput<'AbovePrompt'>) {
+  band.isCollapsed = e.props.isCollapsed
   const [look, diffs, list] = await Promise.all([
     readDiffView($),
     readDiffs($),
     readTurns($),
   ])
-  if (look.row !== e.props.id || look.turn === null) {
+  if (look.turn === null) {
     return null
   }
 
@@ -28,39 +109,50 @@ export async function drawViewer($: EngineInterface, e: RenderInput<'Placed'>) {
   const turn = list.find(one => one.id === look.turn)
   const at = Math.min(Math.max(0, look.file), Math.max(0, files.length - 1))
   const file: DiffFile | undefined = files[at]
-  const columns = e.viewport?.columns ?? 120
+  const columns = e.props.bodyColumns
+  const height = Math.max(CHROME + MIN_BODY, e.props.scroll.bodyRows)
+  const body = height - CHROME
+  band.body = body
 
-  const close = () => changeDiffView($, () => ({ row: null, turn: null, file: 0, page: 0 }))
+  const close = () =>
+    changeDiffView($, () => ({ turn: null, file: 0, top: 0 }))
   const pick = (index: number) => () =>
-    changeDiffView($, old => ({ ...old, file: index, page: 0 }))
-  const page = (by: number) => () =>
-    changeDiffView($, old => ({ ...old, page: Math.max(0, old.page + by) }))
+    changeDiffView($, old => ({ ...old, file: index, top: 0 }))
 
   const header = (
     <Box justifyContent="space-between">
-      <Text color="claude" bold>
-        Changes · {clip(turn?.title ?? 'response', Math.max(10, columns - 40))}
+      <Text color="claude" bold wrap="truncate-end">
+        Changes · {clip(turn?.title ?? 'response', Math.max(10, columns - 44))}
       </Text>
-      <Button key="diff-close" plain onPress={close}>
-        <Text dimColor>✕ Close</Text>
-      </Button>
+      <Box columnGap={2}>
+        {columns >= 60 && <Text dimColor>wheel or ↑↓ scrolls</Text>}
+        <Button key="diff-close" plain onPress={close}>
+          <Text dimColor>✕ Close</Text>
+        </Button>
+      </Box>
     </Box>
   )
 
   if (file === undefined) {
+    band.total = 0
+
     return (
-      <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1}>
+      <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1} height={height}>
         {header}
         <Text dimColor>No diff was recorded for this response.</Text>
       </Box>
     )
   }
 
+  const labels = files.map(one => clip(basename(one.path), 28))
+  const shownTabs = tabWindow(labels, at, columns)
   const tabs = (
-    <Box flexWrap="wrap" columnGap={2}>
-      {files.map((one, index) => {
+    <Box columnGap={2}>
+      {shownTabs.from > 0 && <Text dimColor>‹ {shownTabs.from}</Text>}
+      {files.slice(shownTabs.from, shownTabs.to).map((one, offset) => {
+        const index = shownTabs.from + offset
         const mark = KIND_MARK[one.kind]
-        const label = clip(basename(one.path), 28)
+        const label = labels[index] ?? ''
 
         return (
           <Button key={`diff-f${index}`} plain onPress={pick(index)}>
@@ -80,13 +172,14 @@ export async function drawViewer($: EngineInterface, e: RenderInput<'Placed'>) {
           </Button>
         )
       })}
+      {shownTabs.to < files.length && <Text dimColor>{files.length - shownTabs.to} ›</Text>}
     </Box>
   )
 
-  const rows = sideBySide(file.hunks)
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE))
-  const current = Math.min(look.page, pages - 1)
-  const shown = rows.slice(current * PAGE, (current + 1) * PAGE)
+  const rows: SideRow[] = sideBySide(file.hunks)
+  band.total = rows.length
+  const top = Math.min(Math.max(0, look.top), Math.max(0, rows.length - body))
+  const shown = rows.slice(top, top + body)
   const lastNo = rows.reduce(
     (most, row) =>
       row.kind === 'line'
@@ -124,11 +217,19 @@ export async function drawViewer($: EngineInterface, e: RenderInput<'Placed'>) {
     )
   }
 
-  return (
-    <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1}>
+  const footer =
+    rows.length === 0
+      ? ''
+      : `rows ${top + 1}–${Math.min(rows.length, top + body)} of ${rows.length}` +
+        (top > 0 ? ' · ↑ more above' : '') +
+        (top + body < rows.length ? ' · ↓ more below' : '') +
+        (file.isCut ? ' · long diff: only its first lines were kept' : '')
+
+  const box = (
+    <Box flexDirection="column" borderStyle="round" borderDimColor paddingX={1} height={height}>
       {header}
       {tabs}
-      <Text dimColor>{'─'.repeat(Math.max(10, columns - 8))}</Text>
+      <Text dimColor>{'─'.repeat(Math.max(10, columns - 4))}</Text>
       <Box justifyContent="space-between">
         <Box>
           <Text color={mark.color} bold>
@@ -159,46 +260,39 @@ export async function drawViewer($: EngineInterface, e: RenderInput<'Placed'>) {
           </Text>
         </Box>
       </Box>
-      {rows.length === 0 && (
-        <Text dimColor>
-          {file.kind === 'deleted'
-            ? 'The file was deleted; its old content was not recorded.'
-            : 'No line changes to show.'}
-        </Text>
-      )}
-      {shown.map(row =>
-        row.kind === 'hunk' ? (
-          <Text color="suggestion" dimColor>
-            {`@@ line ${row.oldStart} → ${row.newStart}`}
+      <Box flexDirection="column" height={body} overflow="hidden">
+        {rows.length === 0 && (
+          <Text dimColor>
+            {file.kind === 'deleted'
+              ? 'The file was deleted; its old content was not recorded.'
+              : 'No line changes to show.'}
           </Text>
-        ) : (
-          <Box>
-            {half(row.left)}
-            {half(row.right)}
-          </Box>
-        ),
-      )}
-      {(pages > 1 || file.isCut) && (
-        <Box columnGap={2}>
-          {pages > 1 && (
-            <Button key="diff-prev" plain onPress={page(-1)}>
-              <Text dimColor={current === 0}>‹ Previous</Text>
-            </Button>
-          )}
-          {pages > 1 && (
-            <Text dimColor>
-              rows {current * PAGE + 1}–{Math.min(rows.length, (current + 1) * PAGE)} of{' '}
-              {rows.length}
+        )}
+        {shown.map(row =>
+          row.kind === 'hunk' ? (
+            <Text color="suggestion" dimColor>
+              {`@@ line ${row.oldStart} → ${row.newStart}`}
             </Text>
-          )}
-          {pages > 1 && (
-            <Button key="diff-next" plain onPress={page(1)}>
-              <Text dimColor={current >= pages - 1}>Next ›</Text>
-            </Button>
-          )}
-          {file.isCut && <Text dimColor>long diff: only its first lines were kept</Text>}
-        </Box>
-      )}
+          ) : (
+            <Box>
+              {half(row.left)}
+              {half(row.right)}
+            </Box>
+          ),
+        )}
+      </Box>
+      <Text dimColor wrap="truncate-end">
+        {footer}
+      </Text>
+    </Box>
+  )
+
+  return (
+    <Box flexDirection="column">
+      {box}
+      {Array.from({ length: OVERHANG }, () => (
+        <Text> </Text>
+      ))}
     </Box>
   )
 }

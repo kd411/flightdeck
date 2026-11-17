@@ -1,10 +1,12 @@
 // Flightdeck: a minimal developer HUD for Claude Code.
 //
 // This module only wires events to the pieces beside it:
-//   state.ts   the values the panel draws from
+//   state.ts   the values the panel and viewer draw from
 //   engine.ts  every call that asks the engine for something
-//   panel.tsx  the control panel
-//   rows.tsx   the compact row an edit draws in the chat
+//   panel.tsx  the Flightdeck panel
+//   viewer.tsx the side-by-side diff viewer, in the band above the prompt
+//   rows.tsx   the compact rows edits and shell commands draw in the chat
+//   diff.ts    diffs: reading hunks and laying them out side by side
 //   lib.ts     pure helpers
 //
 // Every hook here observes: it returns what `next(e)` returns, and a failure
@@ -28,10 +30,11 @@ import {
   locate,
   snapshot,
 } from './engine'
-import { EDIT_TOOLS, classify, firstSentence, firstWords, readEdit, tally } from './lib'
+import { EDIT_TOOLS, addTokens, classify, estimateTokens, firstSentence, firstWords, readEdit, tally } from './lib'
+import type { Mark } from './lib'
 import { drawPanel } from './panel'
-import { drawViewer } from './viewer'
-import { drawEditRow } from './rows'
+import { drawViewer, scrollViewer } from './viewer'
+import { drawEditRow, drawScriptRow, isScript, shellChanges, withoutShellDiff } from './rows'
 import {
   PANE,
   changeControls,
@@ -42,7 +45,7 @@ import {
   changeTurns,
 } from './state'
 
-const TITLE = 'Control panel'
+const TITLE = 'Flightdeck'
 const KEPT_TURNS = 50
 
 const KEPT_DIFFS = 20
@@ -68,6 +71,11 @@ async function keepDiff(
 
 let seenEffort: string | null = null
 
+// The skill whose instructions are still to arrive: they come as rows of
+// their own beside the Skill call's result. Cleared by the next tool call
+// and by each new turn, so later rows are never put down to it.
+let skillMarks: readonly Mark[] | null = null
+
 /** Shows a level a request or hook event reported, once per change. */
 function saw($: Parameters<typeof changeControls>[0], level: unknown): void {
   if (typeof level !== 'string' || level === seenEffort) {
@@ -92,7 +100,7 @@ export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'flightdeck',
-      description: 'Show or hide the Flightdeck control panel',
+      description: 'Show or hide the Flightdeck panel',
       argumentHint: '[debug]',
     })
     if (e.isInteractive && isOpenOnStart) {
@@ -175,6 +183,7 @@ export const register: Register = (on, options) => {
     if (e.agentId !== undefined) {
       return next(e)
     }
+    skillMarks = null
     try {
       live = {
         id: e.turnId,
@@ -209,8 +218,33 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // Tokens a skill's instructions bring in beside its call (a call's own
+  // result is counted at tool.call).
+  on('session.append', async ($, e, next) => {
+    const kept = await next(e)
+    try {
+      // A skill's instructions: the user-side rows that follow its call.
+      const marks = skillMarks
+      const isBeside =
+        e.door === 'tool-message' || e.door === 'attachment' || e.door === 'hook-context'
+      if (marks !== null && e.agentId === undefined && isBeside && e.message.role === 'user') {
+        const spent = estimateTokens(e.message.content)
+        if (spent > 0) {
+          await changeExtensions($, old => ({
+            ...old,
+            tokens: addTokens(old.tokens ?? {}, marks, spent),
+          }))
+        }
+      }
+    } catch {
+      // The estimate misses this row; the row itself is kept.
+    }
+
+    return kept
+  })
+
   // The first row of a reply is where "Jump to response" lands.
-  on('session.append', { door: 'response' }, ($, e, next) => {
+  on('session.append', { door: 'response' }, (_, e, next) => {
     if (e.agentId === undefined && live !== null && live.anchor === null) {
       live.anchor = e.uuid
     }
@@ -219,6 +253,12 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', async ($, e, next) => {
+    if (e.agentId === undefined) {
+      skillMarks =
+        String(e.tool) === 'Skill'
+          ? classify('Skill', e).filter(mark => mark.kind !== 'tool')
+          : null
+    }
     const ran = await next(e)
     try {
       const tool = String(e.tool)
@@ -283,9 +323,16 @@ export const register: Register = (on, options) => {
         await keepDiff($, turnId, [diff])
       }
       if (marks.some(mark => mark.kind !== 'tool')) {
+        // What the call brought in: its result as the model reads it, and
+        // any context the engine attached after it.
+        const spent =
+          ran.deny === undefined
+            ? estimateTokens(ran.text ?? ran.result) + estimateTokens(ran.context ?? [])
+            : 0
         await changeExtensions($, old => ({
           ...old,
           used: tally(old.used, marks, mark => mark.kind !== 'tool'),
+          tokens: addTokens(old.tokens ?? {}, marks, spent),
         }))
       }
     } catch {
@@ -400,35 +447,59 @@ export const register: Register = (on, options) => {
     drawPanel($, e),
   )
 
-  // The diff viewer, in a row of the chat.
-  on('ui.render', { component: 'Placed' }, async ($, e, next) => {
-    if (e.props.plugin !== $.plugin.name) {
+  // While the viewer is open the band does not scroll: its code rows do.
+  on('ui.scroll', async ($, e, next) => {
+    try {
+      if (await scrollViewer($, e)) {
+        return {}
+      }
+    } catch {
+      // The band scrolls as it would.
+    }
+
+    return next(e)
+  })
+
+  // The diff viewer, in the band above the prompt: its own scrolling box.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.props.hasSurvey) {
       return next(e)
     }
 
     return (await drawViewer($, e)) ?? next(e)
   })
 
-  // Edits: one compact row in place of the diff. ctrl+o still shows it all.
+  // Edits, and shell scripts that carry code: one compact row in place of
+  // the diff or the script. ctrl+o still shows it all.
   on('ui.render', { component: 'ToolUse' }, ($, e, next) => {
-    if (
-      !isCompact ||
-      e.props.isExpanded === true ||
-      !EDIT_TOOLS.includes(e.props.tool)
-    ) {
+    if (!isCompact || e.props.isExpanded === true) {
       return next(e)
     }
+    if (EDIT_TOOLS.includes(e.props.tool)) {
+      return drawEditRow($, e)
+    }
+    if (
+      String(e.props.tool) === 'Bash' &&
+      (isScript(e.props.input) || shellChanges(e.props.output) !== null)
+    ) {
+      return drawScriptRow($, e)
+    }
 
-    return drawEditRow($, e)
+    return next(e)
   })
 
   on('ui.render', { component: 'ToolResult' }, ($, e, next) => {
-    if (
-      !isCompact ||
-      e.props.isExpanded === true ||
-      e.props.isErrored ||
-      !EDIT_TOOLS.includes(e.props.tool)
-    ) {
+    if (!isCompact || e.props.isExpanded === true || e.props.isErrored) {
+      return next(e)
+    }
+    // A shell command's output stays; the file diff under it goes, as the
+    // command's row already lists each file with its line counts.
+    if (e.props.tool === 'Bash') {
+      return shellChanges(e.props.output) === null
+        ? next(e)
+        : next({ ...e, props: { ...e.props, output: withoutShellDiff(e.props.output) } })
+    }
+    if (!EDIT_TOOLS.includes(e.props.tool)) {
       return next(e)
     }
     const { Box } = $.ui.resolve(e)

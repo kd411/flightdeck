@@ -10,84 +10,89 @@ Every gauge you need, docked beside the chat. Nothing you don't.
 ![Model calls: zero](https://img.shields.io/badge/model%20calls-0-86c986?style=flat-square)
 ![Theme: yours](https://img.shields.io/badge/theme-yours-b79cf2?style=flat-square)
 
-[Features](#-features) · [Install](#-install) · [Use](#-use) · [Settings](#%EF%B8%8F-settings) · [Develop](#%EF%B8%8F-develop)
+[Features](#-features) · [Tour](#-feature-tour) · [Install](#-install) · [Use](#-use) · [Settings](#%EF%B8%8F-settings) · [Develop](#%EF%B8%8F-develop)
 
 </div>
 
 ---
 
 <p align="center">
-  <img src="docs/fullscreen.svg" alt="Flightdeck in a fullscreen terminal: the chat on the left with compact edit rows and the diff viewer open, the control panel docked on the right" width="100%">
+  <img src="docs/flightdeck.svg" alt="Flightdeck in a fullscreen terminal, with made-up sample data: compact edit rows in the chat, the side-by-side diff viewer open above the prompt, and the Flightdeck panel docked on the right" width="100%">
 </p>
-
-<details>
-<summary><b>The control panel as text</b></summary>
-
-```
-╭──────────────────────────────────────────────╮
-│ Control panel                                │
-│ ──────────────────────────────────────────── │
-│ MODEL                        claude-fable ▾  │
-│ EFFORT              low  medium  high  max   │
-│ ──────────────────────────────────────────── │
-│ SESSION                                47m   │
-│ 5h limit ━━━━━━━━━━━━━━━━━━━━  38%  resets 2h│
-│ Weekly   ━━━━━━━━━━━━━━━━━━━━  21%  resets 3d│
-│ Size 205k                in 182k · out 23.1k │
-│ ──────────────────────────────────────────── │
-│ CONTEXT                       43% 86k / 200k │
-│ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
-│ ■■■■■ 5 components ▾                         │
-│ ──────────────────────────────────────────── │
-│ CHAT HISTORY    ↑ jump 👀 diff · tok · files │
-│ ▸ Explored the auth mod   ↑    18.2k       — │
-│ ▾ Rotated tokens on serv  ↑ 👀 52.3k 3 files │
-│   Added rotation on every refresh.           │
-│   api-server  2 modified, 1 added  +155 −11  │
-│   Tools  Bash ×2 · Read ×6                   │
-│ ──────────────────────────────────────────── │
-│ EXTENSIONS                 used this session │
-│ ▸ Skills      2 used                  3 runs │
-│ ▸ Connectors  1 of 2 used            4 calls │
-│ ▸ MCP         2 of 4 used           11 calls │
-╰──────────────────────────────────────────────╯
-```
-
-</details>
 
 ## ✨ Features
 
 | | Section | What you get |
 | :---: | --- | --- |
+| 📁 | **Where you are** | The panel's header shows the session's directory. |
 | 🎛️ | **Model & effort** | The current model and effort level, highlighted. Click the model to change it; click a level to switch to it. |
 | ⏱️ | **Session** | Your 5-hour and weekly plan usage as bars with percentages and reset times, plus the session's size in tokens. |
 | 🧠 | **Context** | How full the context window is, coloured by component, with a per-category breakdown that is open by default. |
 | 💬 | **Chat history** | One row per response with its title, tokens and files changed. Unfold a row for its opening sentence, a count per repository of files **added**, **modified**, **renamed** and **deleted**, and every tool, MCP server, connector, plugin and skill it used. |
 | ↑ | **Jump** | Scrolls the chat straight to that response. |
-| 👀 | **Diff viewer** | Opens the response's changes in the chat, side by side: before on the left, after on the right, one tab per file. |
-| 🧩 | **Extensions** | How many skills, connectors, plugins and MCP servers the session used, with call counts. |
-| ✂️ | **Compact edit rows** | Edits stop printing diffs into the chat. Each one becomes a single glanceable row. |
+| 👀 | **Diff viewer** | Opens the response's changes in a box above the prompt that scrolls on its own, side by side: before on the left, after on the right, one tab per file. |
+| 🧩 | **Extensions** | How many skills, connectors, plugins and MCP servers the session used, with call counts and an estimate of the tokens each brought into the conversation. |
+| ✂️ | **Compact edit rows** | Edits and shell commands stop printing code and diffs into the chat. Each shows what it did and every file it changed, with the lines added and removed. |
 
-Here is what an edit looks like in the chat:
+## 🔍 Feature tour
 
-```diff
-● Update session.ts
-  ⎿ api-server › src/auth/session.ts                          +18 −4
-● Create refresh.test.ts
-  ⎿ api-server › test/auth/refresh.test.ts                    +96 new
-```
+From the top of the panel down, then the chat.
 
-Press `ctrl+o` any time to see the full change.
+### 📁 Where you are
+
+The panel's header names the mod and the directory the session runs in, with your home folder written as `~`. A long path is cut from the front, so the folder you are in stays visible.
+
+<p align="center"><img src="docs/features/where-you-are.svg" alt="The Flightdeck header: the title, and ~/projects/api-server under it" width="480"></p>
+
+### 🎛️ Model & effort
+
+The model the session runs on, and the effort levels it offers with the one in force highlighted. Click the model to change it, or click a level to switch to it. The panel reads the level from each request, so it always shows what is really in use.
+
+<p align="center"><img src="docs/features/model-effort.svg" alt="The MODEL row showing claude-sonnet-5-5, and the EFFORT row with medium highlighted" width="480"></p>
+
+### ⏱️ Session
+
+How long the session has run, your 5-hour and weekly plan usage as bars with percentages and the time until each resets, and the session's size: the tokens sent in and received.
+
+<p align="center"><img src="docs/features/session.svg" alt="The SESSION section: 52m, a 5h limit bar at 38%, a weekly bar at 21%, and size 205k" width="480"></p>
+
+### 🧠 Context
+
+How full the context window is, as a percentage and in tokens, with a bar coloured by what fills it. The breakdown under it lists each part, from the system prompt and tools to the messages, with its tokens and share. It is open by default; click `components` to fold it.
+
+<p align="center"><img src="docs/features/context.svg" alt="The CONTEXT section: 43% of 200k, a coloured bar, and a breakdown of six components" width="480"></p>
+
+### 💬 Chat history
+
+One row per response, newest last, with its title, the tokens it used and the files it changed. Click `▸` on a row to unfold it: its opening sentence, a count per repository of files **added**, **modified**, **renamed** and **deleted** with the lines changed, and every tool, MCP server, connector, plugin and skill it used.
+
+<p align="center"><img src="docs/features/chat-history.svg" alt="The CHAT HISTORY section: seven responses, each with an up arrow, tokens and files" width="480"></p>
+
+### ↑ Jump
+
+Click `↑` on a row and the chat scrolls straight to that response, however far back it is.
+
+<p align="center"><img src="docs/features/jump.svg" alt="Three chat history rows, each with the up arrow that jumps to the response" width="480"></p>
 
 ### 👀 Diff viewer
 
-Click `👀` on a chat history row and the response's changes open in the chat, side by side. Each changed file is a tab marked `A` added, `M` modified, `R` renamed or `D` deleted; the selected file shows before on the left and after on the right, with line numbers and removed and added lines tinted.
+Click `👀` on a row that changed files, and the response's changes open in a box above the prompt, side by side. Each changed file is a tab marked `A` added, `M` modified, `R` renamed or `D` deleted. The selected file shows before on the left and after on the right, with line numbers, and removed and added lines tinted.
 
-<p align="center">
-  <img src="docs/diff-viewer.svg" alt="The Flightdeck diff viewer: file tabs at the top and one file's changes side by side, before and after" width="100%">
-</p>
+The title, the file tabs and the column headings stay fixed while the wheel and arrow keys scroll the code under them, so the chat stays where it is. A footer shows which rows are in view. Every file shows exactly what that one response changed, whether Claude edited it with a tool or a shell command did. `✕ Close` hides the viewer.
 
-Every file shows exactly what that one response changed, whether Claude edited it with a tool or a shell command did. Long diffs page with `‹ Previous` and `Next ›`, and `✕ Close` hides the viewer.
+<p align="center"><img src="docs/features/diff-viewer.svg" alt="The diff viewer: a title, three file tabs, and session.ts before and after, side by side" width="100%"></p>
+
+### 🧩 Extensions
+
+What the session has used beyond the built-in tools: skills, connectors, plugins and MCP servers. Each row says how many were used, out of how many are available, with an estimate of the tokens their calls brought into the conversation and the number of calls. Click a row to list each one.
+
+<p align="center"><img src="docs/features/extensions.svg" alt="The EXTENSIONS section: skills, connectors, plugins and MCP, each with tokens and calls" width="480"></p>
+
+### ✂️ Compact edit rows
+
+Edits and shell commands stop printing code and diffs into the chat. Each one becomes a short row that says what was done, then lists every file it changed, with its repository and the lines added and removed. A shell command's own output, such as a test run's results, still shows; only its script and file diff are folded away. Press `ctrl+o` any time to see the full change.
+
+<p align="center"><img src="docs/features/compact-rows.svg" alt="Compact rows in the chat: an update, a new file, a rename across two files, and a test run" width="620"></p>
 
 ## 📦 Install
 
@@ -123,7 +128,7 @@ In the desktop app, where `/plugin` does not run: click **+** next to the prompt
 | Click **↑** | Jump to the response in the chat. |
 | Click **👀** | Open the side-by-side diff viewer for that response. |
 | `ctrl+x` then `tab` | Focus the panel and drive it with the arrow keys and Enter. |
-| `/flightdeck debug` | Print what the mod can see of the model and effort controls. |
+| `/flightdeck debug` | Print what the mod can see of the model and effort controls, for bug reports. |
 
 ### 🖥️ Screen sizes
 
@@ -168,9 +173,10 @@ Change these in `/config`:
 - **Model and effort clicks** use Claude Code's own settings. Where a setting cannot be changed from a mod, clicking the model opens the `/model` picker instead, and the effort row is hidden if no effort control is available.
 - **Jump to response** scrolls the fullscreen chat. A response that was cleared or compacted away cannot be reached.
 - **Files changed by shell commands** (a script, `sed`, a formatter) are found by snapshotting the session repository's working tree before and after each response. It uses git with an index file of its own (`.git/flightdeck.index`), so your staging area is never touched; the snapshots leave unreferenced objects that `git gc` clears. Shell edits in other repositories are not counted.
-- **The diff viewer** opens as a row at the end of the chat, not as a window over it; Claude Code gives mods no way to cover the chat. Diffs are kept for the last 20 responses and the first 600 lines of each file. Every file shows exactly what that response changed, deleted files included.
+- **The diff viewer** opens in the band above the prompt, which Claude Code caps at half the terminal's height; mods have no way to cover the whole chat. Claude Code also draws its own `[-]` beside the band, which folds it (`ctrl+x ctrl+a` unfolds it). Diffs are kept for the last 20 responses and the first 600 lines of each file.
 - **Repository names** come from the nearest `.git` folder above the file. A file outside any repository is listed under its folder name.
-- **The mod API is early access** and may change between Claude Code releases. Built and tested against Claude Code 2.1.325.
+- **Token figures in Extensions** are estimates, at about four characters a token, of the text each call brought into the conversation. A skill counts its instructions only the first time it loads in a session.
+- **The mod API is early access** and may change between Claude Code releases. Built and tested against Claude Code 2.1.326.
 
 </details>
 
@@ -191,15 +197,15 @@ claude plugin test ./flightdeck      # run the tests
 | File | Role |
 | --- | --- |
 | `hooks/register.tsx` | Wires Claude Code events to the pieces below. |
-| `hooks/panel.tsx` | Draws the control panel. |
+| `hooks/panel.tsx` | Draws the Flightdeck panel. |
 | `hooks/viewer.tsx` | Draws the diff viewer. |
 | `hooks/diff.ts` | Reads diffs and lays them out side by side. |
-| `hooks/rows.tsx` | Draws the compact edit row. |
+| `hooks/rows.tsx` | Draws the compact rows for edits and shell commands. |
 | `hooks/engine.ts` | Every call that asks Claude Code for something. |
-| `hooks/state.ts` | The values the panel draws from. |
+| `hooks/state.ts` | The values the panel and viewer draw from. |
 | `hooks/lib.ts` | Pure helpers: formatting, counting, classifying. |
 | `types/index.d.ts` | The state contract. |
-| `docs/` | The README's pictures, drawn from made-up sample data. |
+| `docs/` | The README's pictures, and `mockup.py`, which draws them all from made-up data: `python3 docs/mockup.py docs`. |
 | `tests/flightdeck.test.tsx` | Tests. |
 
 </details>

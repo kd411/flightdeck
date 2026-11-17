@@ -17,14 +17,15 @@ Thanks for helping. Issues and pull requests are welcome.
    - Every hook observes: it returns what `next(e)` returns, and a failure in the mod's own bookkeeping must never break a tool call or a turn.
    - Guard every read from the engine. A figure that is not available is hidden, not guessed.
    - Size every drawing to the columns it is given. Check the panel at 30, 44 and 60 columns.
-4. If you change the fields of a stored value, change its `shape` tag in `hooks/state.ts` so values stored by an older version are declined.
+4. If you change the fields of a stored value, change its `shape` tag in `hooks/state.ts` so values stored by an older version are declined. A new optional field needs no new tag.
+5. Update the README when what a person sees or does changes.
 
 ## Never commit
 
 - Keys, tokens or credentials of any kind.
 - Internal hostnames, URLs, project names or code from an employer or client.
-- Transcripts or screenshots of real sessions. Use made-up sample data.
+- Transcripts of real sessions. A screenshot is fine when everything in it is safe to publish: no names, emails, private paths, client code or account details.
 
 ## Reporting a bug
 
-Include your Claude Code version (`claude --version`), your terminal and its width in columns, and what you expected to see. Run with `claude --debug` and include any line that starts with `flightdeck:`, after removing anything private.
+Include your Claude Code version (`claude --version`), your terminal and its width in columns, and what you expected to see. Run `/flightdeck debug` and include its output. If a hook failed, run with `claude --debug` and include any line that starts with `flightdeck:`. Remove anything private first.

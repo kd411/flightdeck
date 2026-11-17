@@ -26,6 +26,8 @@ export type Turn = {
   isRunning: boolean
   /** Transcript rows to scroll to, best first. */
   anchors: string[]
+  /** No longer written; kept so turns saved by earlier versions still read. */
+  last?: string
   files: FileChange[]
   /** Call counts keyed `<kind>:<name>`, kind as ExtKind or `tool`. */
   uses: Record<string, number>
@@ -60,6 +62,8 @@ export type Category = { name: string; tokens: number; color: string }
 /** Extension usage: calls keyed `<kind>:<name>`, and how many exist. */
 export type Extensions = {
   used: Record<string, number>
+  /** Estimated tokens each extension's calls brought into the conversation. */
+  tokens?: Record<string, number>
   available: Partial<Record<ExtKind, number>>
 }
 
@@ -91,12 +95,11 @@ export type DiffFile = {
   isSinceCommit: boolean
 }
 
-/** Which response's changes the viewer shows, in which placed row. */
+/** Which response's changes the viewer shows: its file, and the first code row in view. */
 export type DiffView = {
-  row: string | null
   turn: string | null
   file: number
-  page: number
+  top: number
 }
 
 declare module 'claude-code' {

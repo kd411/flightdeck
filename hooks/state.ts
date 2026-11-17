@@ -78,8 +78,8 @@ const diffs = atom(
 
 const diffView = atom(
   { plugin: 'flightdeck', key: 'diffView' } as const,
-  { row: null, turn: null, file: 0, page: 0 },
-  { shape: 'diffview-1' },
+  { turn: null, file: 0, top: 0 },
+  { shape: 'diffview-2' },
 )
 
 // The state library's calls name their value where the engine's scan can
