@@ -1,6 +1,8 @@
 <div align="center">
 
-# ✈️ Flightdeck
+<img src="docs/icon.svg" alt="Flightdeck icon: a gauge dial over three HUD bars" width="128">
+
+# Flightdeck
 
 **A minimal heads-up display for [Claude Code](https://claude.com/claude-code).**<br>
 Every gauge you need, docked beside the chat. Nothing you don't.
@@ -206,6 +208,7 @@ claude plugin test ./flightdeck      # run the tests
 | `hooks/lib.ts` | Pure helpers: formatting, counting, classifying. |
 | `types/index.d.ts` | The state contract. |
 | `docs/` | The README's pictures, and `mockup.py`, which draws them all from made-up data: `python3 docs/mockup.py docs`. |
+| `.claude-plugin/icon.png` | The plugin's icon, rendered at 1024 × 1024 from `docs/icon.svg`. |
 | `tests/flightdeck.test.tsx` | Tests. |
 
 </details>
