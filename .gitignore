@@ -1,0 +1,15 @@
+# Written by Claude Code when it loads the mod
+.claude-plugin/types/
+.mcpb-cache/
+
+# Local settings and secrets
+.env
+.env.*
+.claude/settings.local.json
+
+# OS and editor files
+.DS_Store
+*.swp
+*~
+*.log
+node_modules/

@@ -1,0 +1,33 @@
+{
+  "name": "flightdeck",
+  "version": "0.2.0",
+  "description": "Flightdeck: a minimal developer HUD for Claude Code. Model and effort controls, usage and context meters, chat history with a side-by-side diff viewer, extension calls and token estimates, and compact rows for edits and shell commands.",
+  "license": "MIT",
+  "keywords": [
+    "hud",
+    "dashboard",
+    "usage",
+    "context",
+    "diff",
+    "panel"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "compactEdits": {
+      "type": "boolean",
+      "title": "Compact edit rows",
+      "description": "Hide code and diffs in the chat, for edits and shell commands alike, and show the action, repository, file and line counts instead. ctrl+o still shows the full change.",
+      "default": true
+    },
+    "openOnStart": {
+      "type": "boolean",
+      "title": "Open the panel at session start",
+      "description": "Open the Flightdeck panel beside the chat when a session starts, if the terminal is wide enough.",
+      "default": true
+    }
+  },
+  "author": {
+    "name": "Flightdeck contributors"
+  },
+  "repository": "https://github.com/kd411/flightdeck"
+}
