@@ -554,3 +554,83 @@ test('the effort in force is read from the settings for the session model', asyn
   expect(await ui.find({ type: 'Text', text: /^ med(ium)? $/ })).toBeDefined()
   await ui.unmount()
 })
+
+/** Lets the work a hook left running settle. */
+const later = (globalThis as unknown as { setTimeout: (run: () => void, ms: number) => unknown }).setTimeout
+
+async function settle() {
+  for (let i = 0; i < 10; i += 1) {
+    await new Promise<void>(resolve => later(resolve, 5))
+  }
+}
+
+test('a turn reloads the controls only when the model changed', async ($, on) => {
+  mock.clock(on)
+  let model = 'claude-fable-5-2'
+  let lists = 0
+  on('command.register', () => ({ value: { command: 'flightdeck' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.model', () => ({ value: model }))
+  on('config.list', () => ((lists += 1), { value: [] }))
+  on('command.list', () => ({ value: [] }))
+  on('tool.list', () => ({ value: [] }))
+  on('env.get', () => ({ value: undefined }))
+  on('settings.read', () => ({ value: {} }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: false })
+  await settle()
+  const atStart = lists
+  await $.turn.start({ text: 'one', turnId: 'c1' })
+  await $.turn.start({ text: 'two', turnId: 'c2' })
+  await settle()
+  expect(lists).toBe(atStart)
+
+  model = 'claude-opus-5-5'
+  await $.turn.start({ text: 'three', turnId: 'c3' })
+  await settle()
+  expect(lists).toBe(atStart + 1)
+})
+
+test('a file edited many times in a response is one entry', async ($, on) => {
+  mock.clock(on)
+  on('fs.exists', (_, e) => ({ value: e.path === '/work/api-server/.git' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: EDIT_RESULT }))
+
+  await $.turn.start({ text: 'edit', turnId: 'm1' })
+  for (let n = 0; n < 3; n += 1) {
+    await $.tool.call({ tool: 'Edit', file_path: '/work/api-server/src/auth/session.ts', old_string: 'a', new_string: 'b' })
+  }
+  await $.turn.complete({ turnId: 'm1', answer: 'Edited.', durationMs: 1, isAborted: false, reason: 'answer' })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /1 file$/ })).toBeDefined()
+  await ui.press({ key: 't-m1' })
+  expect(await ui.find({ type: 'Text', text: /^\+6$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the effort seen on requests is written to the store only when it changes', async ($, on) => {
+  let writes = 0
+  const stored: Record<string, unknown> = {}
+  on('session.model', () => ({ value: 'claude-fable-5-2' }))
+  on('config.list', () => ({ value: [] }))
+  on('command.list', () => ({ value: [] }))
+  on('env.get', () => ({ value: undefined }))
+  on('settings.read', () => ({ value: {} }))
+  on('classic.PostToolUse', () => ({}))
+  on('store.get', (_, e) => ({ value: stored[e.key] }))
+  on('store.set', (_, e) => ((writes += 1), (stored[e.key] = e.value), { value: undefined }))
+  on('store.delete', (_, e) => ((writes += 1), delete stored[e.key], { value: undefined }))
+
+  stored['effort:claude-fable-5-2'] = 'high'
+  await $.classic.PostToolUse({ effort: { level: 'high' } } as never)
+  await settle()
+  expect(writes).toBe(0)
+  await $.classic.PostToolUse({ effort: { level: 'max' } } as never)
+  await settle()
+  expect(writes).toBe(1)
+  expect(stored['effort:claude-fable-5-2']).toBe('max')
+})

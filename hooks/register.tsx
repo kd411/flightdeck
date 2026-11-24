@@ -22,11 +22,12 @@ import {
   sawRequestEffort,
   loadAvailable,
   loadControls,
-  loadBreakdown,
+  loadBreakdownIfShown,
+  refreshControls,
   loadMeter,
   locate,
 } from './engine'
-import { EDIT_TOOLS, addTokens, classify, estimateTokens, firstSentence, firstWords, readEdit, tally } from './lib'
+import { EDIT_TOOLS, addTokens, classify, estimateTokens, firstSentence, firstWords, mergeFiles, readEdit, tally } from './lib'
 import type { Mark } from './lib'
 import { drawPanel } from './panel'
 import { drawViewer, scrollViewer } from './viewer'
@@ -104,18 +105,22 @@ export const register: Register = (on, options) => {
       argumentHint: '[debug]',
     })
     if (e.isInteractive && isOpenOnStart) {
+      // The breakdown is measured only for a panel that opened.
       void $.ui.open({
         id: PANE,
         title: TITLE,
         columns: 46,
         backgroundColor: 'transparent',
-      }).catch(() => {})
+      })
+        .then(() => loadBreakdownIfShown($))
+        .catch(() => {})
     }
+    // One command list for both readers.
+    const commands = $.command.list().catch(() => undefined)
     void Promise.all([
       loadMeter($),
-      loadControls($),
-      loadAvailable($),
-      loadBreakdown($),
+      loadControls($, commands),
+      loadAvailable($, commands),
     ]).catch(
       () => {},
     )
@@ -139,6 +144,8 @@ export const register: Register = (on, options) => {
         columns: 46,
         backgroundColor: 'transparent',
       })
+
+    void loadBreakdownIfShown($).catch(() => {})
 
     return {
       text: opened.isPlaced
@@ -199,7 +206,7 @@ export const register: Register = (on, options) => {
           turn,
         ].slice(-KEPT_TURNS),
       )
-      void loadControls($).catch(() => {})
+      void refreshControls($).catch(() => {})
     } catch {
       // The panel misses a turn; the turn itself goes on.
     }
@@ -327,7 +334,8 @@ export const register: Register = (on, options) => {
             return {
               ...one,
               anchors: [...anchors],
-              files: changes.length === 0 ? one.files : [...one.files, ...changes],
+              // One entry per file, however often it is edited.
+              files: changes.length === 0 ? one.files : mergeFiles([...one.files, ...changes]),
               uses: tally(one.uses, marks),
             }
           }),
@@ -397,8 +405,8 @@ export const register: Register = (on, options) => {
         if (live?.id === e.turnId) {
           live = null
         }
-        // Local estimate: keeps the open component list current for free.
-        void loadBreakdown($).catch(() => {})
+        // Local estimate, and only for a component list someone can see.
+        void loadBreakdownIfShown($).catch(() => {})
       }
     } catch {
       // The history misses this turn's figures; the turn's end stands.
@@ -429,7 +437,7 @@ export const register: Register = (on, options) => {
   )
 
   // While the viewer is open the band does not scroll: its code rows do.
-  on('ui.scroll', async ($, e, next) => {
+  on('ui.scroll', { component: 'AbovePrompt' }, async ($, e, next) => {
     try {
       if (await scrollViewer($, e)) {
         return {}

@@ -48,7 +48,7 @@ The panel's header names the mod and the directory the session runs in, with you
 
 ### 🎛️ Model & effort
 
-The model the session runs on, and the effort levels it offers with the one in force highlighted. Click the model to change it, or click a level to switch to it. The panel reads the level from each request, so it always shows what is really in use.
+The model the session runs on, and the effort levels it offers with the one in force highlighted. Click the model to change it, or click a level to switch to it. The panel reads the level Claude Code reports at each tool call and at the end of each response, so it shows what is really in use.
 
 <p align="center"><img src="docs/features/model-effort.svg" alt="The MODEL row showing claude-sonnet-5-5, and the EFFORT row with medium highlighted" width="480"></p>
 
@@ -159,10 +159,10 @@ Change these in `/config`:
 > **Flightdeck makes zero model calls and adds nothing to Claude's context.**
 
 - 📊 Usage, limits and context figures are the ones Claude Code already tracks.
-- 🧮 The context breakdown is estimated locally, with no request.
+- 🧮 The context breakdown is estimated locally, with no request, and only while the panel is shown with the breakdown open.
 - 📝 Chat titles and summaries come from the response's own text.
 - 🔒 It never changes your prompts, the system prompt or tool results.
-- 🏠 It sends nothing anywhere. On disk it keeps only the last effort level seen per model, and its own git index inside each repository it watches.
+- 🏠 It sends nothing anywhere. On disk it keeps only the last effort level seen per model, written only when that level changes. It runs no git and writes nothing to your repositories.
 
 ## 🧭 Limitations
 

@@ -15,15 +15,21 @@ import {
   relative,
 } from './lib'
 import {
+  PANE,
   changeBreakdown,
   changeControls,
   changeDiffView,
   changeExtensions,
   changeMeter,
   changeView,
+  readControls,
+  readView,
 } from './state'
 
 type Engine = EngineInterface
+
+/** The session's commands, as `$.command.list()` resolves them. */
+type Commands = Awaited<ReturnType<Engine['command']['list']>>
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
 
@@ -63,12 +69,31 @@ export async function loadBreakdown($: Engine): Promise<void> {
   await changeBreakdown($, () => used)
 }
 
-/** Reads the model, the effort level and the ways a press can change them. */
-export async function loadControls($: Engine): Promise<void> {
+/**
+ * The breakdown again, only while someone can see it: the panel shown with
+ * its context section open. Unfolding the section reads it afresh.
+ */
+export async function loadBreakdownIfShown($: Engine): Promise<void> {
+  const [panes, look] = await Promise.all([attempt(() => $.ui.panes()), readView($)])
+  if (!look.isContextOpen || !(panes ?? []).some(pane => pane.id === PANE && pane.isShown)) {
+    return
+  }
+  await loadBreakdown($)
+}
+
+/**
+ * Reads the model, the effort level and the ways a press can change them.
+ * `listed` is a command list already asked for, so a caller that needs it
+ * too asks once.
+ */
+export async function loadControls(
+  $: Engine,
+  listed?: Promise<Commands | undefined>,
+): Promise<void> {
   const [model, rows, commands] = await Promise.all([
     attempt(() => $.session.model()),
     attempt(() => $.config.list()),
-    attempt(() => $.command.list()),
+    listed ?? attempt(() => $.command.list()),
   ])
   const found = await findEffort($)
   const modelRow = rows?.find(row => row.key === 'model' && !row.isLocked)
@@ -91,6 +116,21 @@ export async function loadControls($: Engine): Promise<void> {
     hasModelCommand: names.has('model'),
     hasEffortCommand,
   }))
+}
+
+/**
+ * The controls again, only when the session's model is not the one shown:
+ * `/model`, `/effort` and the panel's own presses reload them already.
+ */
+export async function refreshControls($: Engine): Promise<void> {
+  const [model, shown] = await Promise.all([
+    attempt(() => $.session.model()),
+    readControls($),
+  ])
+  if (model !== undefined && model === shown.model) {
+    return
+  }
+  await loadControls($)
 }
 
 /** Where the effort level in force was read from. */
@@ -131,8 +171,13 @@ function seenKey(model: string): string {
 export async function forgetRequestEffort($: Engine): Promise<void> {
   fromRequest = null
   const model = await attempt(() => $.session.model())
-  if (model !== undefined) {
-    await attempt(() => $.store.set(seenKey(model), null))
+  if (model === undefined) {
+    return
+  }
+  // The store is a file: write it only when there is a level to drop.
+  const key = seenKey(model)
+  if ((await attempt(() => $.store.get(key))) != null) {
+    await attempt(() => $.store.delete(key))
   }
 }
 
@@ -142,8 +187,13 @@ export async function sawRequestEffort($: Engine, level: string): Promise<void> 
   }
   fromRequest = level
   const model = await attempt(() => $.session.model())
-  if (model !== undefined) {
-    await attempt(() => $.store.set(seenKey(model), level))
+  if (model === undefined) {
+    return
+  }
+  // The store is a file: a level it already holds is not written again.
+  const key = seenKey(model)
+  if ((await attempt(() => $.store.get(key))) !== level) {
+    await attempt(() => $.store.set(key, level))
   }
 }
 
@@ -224,10 +274,13 @@ export async function describeControls($: Engine): Promise<string> {
 }
 
 /** Counts the connectors, plugins and MCP servers the session can use. */
-export async function loadAvailable($: Engine): Promise<void> {
+export async function loadAvailable(
+  $: Engine,
+  listed?: Promise<Commands | undefined>,
+): Promise<void> {
   const [tools, commands] = await Promise.all([
     attempt(() => $.tool.list()),
-    attempt(() => $.command.list()),
+    listed ?? attempt(() => $.command.list()),
   ])
   if (tools === undefined && commands === undefined) {
     return
