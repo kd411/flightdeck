@@ -1,12 +1,13 @@
-// Diffs as the viewer needs them: hunks read from an edit tool's result or
-// from git's output, and laid out side by side. Pure, so all of it is
+// Diffs as the viewer needs them: hunks read from an edit tool's or a shell
+// command's result, and laid out side by side. Pure, so all of it is
 // testable without an engine.
 
 import type { DiffFile, DiffHunk } from '../types'
 
-/** Lines kept per file, and files kept per response. */
+/** Lines kept per file, files kept per response, and characters kept per line. */
 export const MAX_LINES = 600
 export const MAX_FILES = 40
+export const MAX_LINE_CHARS = 500
 
 type PatchHunk = { oldStart?: unknown; newStart?: unknown; lines?: unknown }
 
@@ -34,29 +35,10 @@ export function hunksOfNewFile(content: string): DiffHunk[] {
   if (content === '') {
     return []
   }
-  const lines = content.replace(/\n$/, '').split('\n')
+  // One line past the cap, so capHunks still marks the file cut.
+  const lines = content.replace(/\n$/, '').split('\n', MAX_LINES + 1)
 
   return [{ oldStart: 0, newStart: 1, lines: lines.map(line => '+' + line) }]
-}
-
-/** Hunks from git's unified diff text. */
-export function hunksOfUnified(text: string): DiffHunk[] {
-  const hunks: DiffHunk[] = []
-  let current: DiffHunk | null = null
-  for (const line of text.split('\n')) {
-    const head = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line)
-    if (head !== null) {
-      current = { oldStart: Number(head[1]), newStart: Number(head[2]), lines: [] }
-      hunks.push(current)
-    } else if (
-      current !== null &&
-      (line.startsWith(' ') || line.startsWith('+') || line.startsWith('-'))
-    ) {
-      current.lines.push(line)
-    }
-  }
-
-  return hunks
 }
 
 /** Keeps at most `MAX_LINES` lines across a file's hunks. */
@@ -70,11 +52,16 @@ export function capHunks(hunks: readonly DiffHunk[]): {
     if (left <= 0) {
       return { hunks: kept, isCut: true }
     }
-    kept.push({ ...hunk, lines: hunk.lines.slice(0, left) })
+    kept.push({ ...hunk, lines: hunk.lines.slice(0, left).map(clipLine) })
     left -= hunk.lines.length
   }
 
   return { hunks: kept, isCut: left < 0 }
+}
+
+/** A line cut to MAX_LINE_CHARS after its mark: the viewer shows half a screen. */
+function clipLine(line: string): string {
+  return line.length <= MAX_LINE_CHARS + 1 ? line : line.slice(0, MAX_LINE_CHARS + 1) + '…'
 }
 
 /** Adds one change to a response's diffs, merging edits of the same file. */

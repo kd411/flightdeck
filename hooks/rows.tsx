@@ -3,6 +3,8 @@
 
 import type { EngineInterface, RenderInput } from 'claude-code'
 
+import type { DiffHunk } from '../types'
+import { hunksOfPatch } from './diff'
 import { locate } from './engine'
 import { basename, countPatch, normalize, readEdit } from './lib'
 
@@ -30,27 +32,30 @@ export type ShellChange = {
   removed: number
   isNew: boolean
   isGone: boolean
+  hunks: DiffHunk[]
 }
 
-/** The files a shell command changed (its `bashEditDiff`), with line counts. */
-export function shellChanges(output: unknown): { files: ShellChange[]; more: number } | null {
+/**
+ * The files a shell command changed (its `bashEditDiff`), with line counts
+ * and hunks. `more` counts the files left out of `files`; `others` names the
+ * ones of those Claude Code still knows by path (no hunks, no counts).
+ */
+export function shellChanges(
+  output: unknown,
+): { files: ShellChange[]; more: number; others: string[] } | null {
   const diff = (output as { bashEditDiff?: unknown } | null)?.bashEditDiff as
     | {
-        files?: { filePath?: unknown; hunks?: { lines?: unknown }[]; created?: true; deleted?: true }[]
+        files?: { filePath?: unknown; hunks?: unknown; created?: true; deleted?: true }[]
         moreFiles?: unknown
+        changedFiles?: unknown
       }
     | undefined
   if (diff === undefined || !Array.isArray(diff.files) || diff.files.length === 0) {
     return null
   }
   const files = diff.files.map(file => {
-    const { added, removed } = countPatch(
-      (file.hunks ?? []).map(hunk => ({
-        lines: Array.isArray(hunk.lines)
-          ? hunk.lines.filter((line): line is string => typeof line === 'string')
-          : [],
-      })),
-    )
+    const hunks = hunksOfPatch(file.hunks)
+    const { added, removed } = countPatch(hunks)
 
     return {
       path: typeof file.filePath === 'string' ? normalize(file.filePath) : '',
@@ -58,10 +63,18 @@ export function shellChanges(output: unknown): { files: ShellChange[]; more: num
       removed,
       isNew: file.created === true,
       isGone: file.deleted === true,
+      hunks,
     }
   })
+  const shown = new Set(files.map(file => file.path))
+  const others = Array.isArray(diff.changedFiles)
+    ? diff.changedFiles
+        .filter((path): path is string => typeof path === 'string')
+        .map(normalize)
+        .filter(path => !shown.has(path))
+    : []
 
-  return { files, more: typeof diff.moreFiles === 'number' ? diff.moreFiles : 0 }
+  return { files, more: typeof diff.moreFiles === 'number' ? diff.moreFiles : 0, others }
 }
 
 /** A shell result without the file diff Claude Code would draw under it. */

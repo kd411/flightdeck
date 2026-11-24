@@ -11,8 +11,8 @@ import {
   kindCounts,
   mergeFiles,
 } from '../hooks/lib'
-import { parseNameStatus, parseNumstat } from '../hooks/engine'
-import { addDiff, hunksOfNewFile, hunksOfUnified, sideBySide } from '../hooks/diff'
+import { MAX_LINE_CHARS, MAX_LINES, addDiff, capHunks, hunksOfNewFile, hunksOfPatch, sideBySide } from '../hooks/diff'
+import { shellChanges } from '../hooks/rows'
 import { movedTop } from '../hooks/viewer'
 
 const PANE = {
@@ -167,17 +167,27 @@ test('an edit draws one compact row, and ctrl+o the full one', async ($, on) => 
 })
 
 test('file changes keep how each file changed', () => {
-  const status = parseNameStatus(
-    ['M', 'a.ts', 'A', 'b.ts', 'D', 'c.ts', 'R087', 'old.ts', 'new.ts', ''].join('\0'),
-  )
-  expect(status.get('a.ts')).toEqual({ kind: 'modified' })
-  expect(status.get('b.ts')).toEqual({ kind: 'added' })
-  expect(status.get('c.ts')).toEqual({ kind: 'deleted' })
-  expect(status.get('new.ts')).toEqual({ kind: 'renamed', from: 'old.ts' })
-
-  const counts = parseNumstat(['3\t1\ta.ts', '0\t9\tc.ts', '2\t2\t', 'old.ts', 'new.ts', ''].join('\0'))
-  expect(counts.get('a.ts')).toEqual({ added: 3, removed: 1 })
-  expect(counts.get('new.ts')).toEqual({ added: 2, removed: 2 })
+  const shell = shellChanges({
+    stdout: '',
+    bashEditDiff: {
+      files: [
+        { filePath: '/r/a.ts', hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: ['-x', '+y', '+z'] }] },
+        { filePath: '/r/b.ts', hunks: [], created: true },
+        { filePath: '/r/c.ts', hunks: [{ oldStart: 1, oldLines: 1, newStart: 0, newLines: 0, lines: ['-gone'] }], deleted: true },
+      ],
+      moreFiles: 2,
+      changedFiles: ['/r/a.ts', '/r/b.ts', '/r/c.ts', '/r/d.ts', '/r/e.ts'],
+    },
+  })
+  expect(shell?.files.map(file => [file.path, file.added, file.removed, file.isNew, file.isGone])).toEqual([
+    ['/r/a.ts', 2, 1, false, false],
+    ['/r/b.ts', 0, 0, true, false],
+    ['/r/c.ts', 0, 1, false, true],
+  ])
+  expect(shell?.files[0]?.hunks).toEqual([{ oldStart: 1, newStart: 1, lines: ['-x', '+y', '+z'] }])
+  expect(shell?.more).toBe(2)
+  expect(shell?.others).toEqual(['/r/d.ts', '/r/e.ts'])
+  expect(shellChanges({ stdout: '' })).toBe(null)
 
   const merged = mergeFiles([
     { repo: 'r', path: 'x.ts', added: 10, removed: 0, kind: 'added' },
@@ -193,9 +203,9 @@ test('file changes keep how each file changed', () => {
 })
 
 test('diffs are laid out side by side', () => {
-  const hunks = hunksOfUnified(
-    ['diff --git a/x b/x', '@@ -10,4 +10,4 @@ fn', ' keep', '-old one', '-old two', '+new one', ' tail'].join('\n'),
-  )
+  const hunks = hunksOfPatch([
+    { oldStart: 10, oldLines: 4, newStart: 10, newLines: 3, lines: [' keep', '-old one', '-old two', '+new one', ' tail'] },
+  ])
   expect(hunks).toEqual([
     { oldStart: 10, newStart: 10, lines: [' keep', '-old one', '-old two', '+new one', ' tail'] },
   ])
@@ -230,6 +240,16 @@ const BAND = {
     view: {},
   },
 } as const
+
+test('long diffs are cut by lines and by line length', () => {
+  const wide = capHunks([{ oldStart: 1, newStart: 1, lines: ['+' + 'x'.repeat(5000)] }])
+  expect(wide.hunks[0]?.lines[0]?.length).toBe(MAX_LINE_CHARS + 2)
+  expect(wide.hunks[0]?.lines[0]?.endsWith('…')).toBe(true)
+
+  const tall = capHunks(hunksOfNewFile(Array.from({ length: 5000 }, (_, i) => `l${i}`).join('\n')))
+  expect(tall.hunks[0]?.lines.length).toBe(MAX_LINES)
+  expect(tall.isCut).toBe(true)
+})
 
 test('the eye opens a side-by-side diff in the band above the prompt', async ($, on) => {
   mock.clock(on)
@@ -274,6 +294,34 @@ test('the eye opens a side-by-side diff in the band above the prompt', async ($,
   await row.press({ key: 'diff-close' })
   expect(await row.find({ type: 'Text', text: /Before/ })).toBeUndefined()
   await row.unmount()
+})
+
+test('diffs are kept for the last 20 responses only', async ($, on) => {
+  mock.clock(on)
+  on('fs.exists', (_, e) => ({ value: e.path === '/work/api-server/.git' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: EDIT_RESULT }))
+
+  for (let n = 1; n <= 21; n += 1) {
+    await $.turn.start({ text: 'edit', turnId: `k${n}` })
+    await $.tool.call({ tool: 'Edit', file_path: '/work/api-server/src/auth/session.ts', old_string: 'old', new_string: 'new' })
+    await $.turn.complete({ turnId: `k${n}`, answer: 'Done.', durationMs: 1, isAborted: false, reason: 'answer' })
+  }
+
+  const tallk1 = await $.ui.mount({ ...PANE, props: { ...PANE.props, scroll: { offset: 0, bodyRows: 100 } }, surface: 'terminal' })
+  await tallk1.press({ key: 'v-k1' })
+  await tallk1.unmount()
+  const gone = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await gone.find({ type: 'Text', text: /No diff was recorded/ })).toBeDefined()
+  await gone.unmount()
+
+  const tallk2 = await $.ui.mount({ ...PANE, props: { ...PANE.props, scroll: { offset: 0, bodyRows: 100 } }, surface: 'terminal' })
+  await tallk2.press({ key: 'v-k2' })
+  await tallk2.unmount()
+  const kept = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await kept.find({ type: 'Text', text: /^new$/ })).toBeDefined()
+  await kept.unmount()
 })
 
 test('the viewer scrolls its code rows under a header that stays put', async ($, on) => {
@@ -367,6 +415,44 @@ test('a shell command that changes files lists each with its line counts', async
   expect(await row.find({ type: 'Text', text: /^ −1$/ })).toBeDefined()
   expect(await row.find({ type: 'Text', text: /^ new$/ })).toBeDefined()
   await row.unmount()
+})
+
+test('files a shell command changed join its response, diffs and all', async ($, on) => {
+  mock.clock(on)
+  on('fs.exists', (_, e) => ({ value: e.path === '/work/api-server/.git' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('tool.call', () => ({
+    result: {
+      stdout: '',
+      stderr: '',
+      interrupted: false,
+      bashEditDiff: {
+        files: [
+          {
+            filePath: '/work/api-server/src/a.ts',
+            hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-before', '+after'] }],
+          },
+        ],
+        moreFiles: 1,
+        changedFiles: ['/work/api-server/src/a.ts', '/work/api-server/src/b.ts'],
+      },
+    },
+  }))
+
+  await $.turn.start({ text: 'sed it', turnId: 's1' })
+  await $.tool.call({ tool: 'Bash', command: 'sed -i s/before/after/ src/*.ts', tool_use_id: 'b1' } as never)
+  await $.turn.complete({ turnId: 's1', answer: 'Replaced it.', durationMs: 10, isAborted: false, reason: 'answer' })
+
+  const panel = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await panel.find({ type: 'Text', text: /2 files/ })).toBeDefined()
+  await panel.press({ key: 'v-s1' })
+  await panel.unmount()
+
+  const band = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await band.find({ type: 'Text', text: /^before$/ })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: /^after$/ })).toBeDefined()
+  await band.unmount()
 })
 
 test('the panel is headed Flightdeck, with the session directory under it', async ($, on) => {
@@ -467,4 +553,84 @@ test('the effort in force is read from the settings for the session model', asyn
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^ med(ium)? $/ })).toBeDefined()
   await ui.unmount()
+})
+
+/** Lets the work a hook left running settle. */
+const later = (globalThis as unknown as { setTimeout: (run: () => void, ms: number) => unknown }).setTimeout
+
+async function settle() {
+  for (let i = 0; i < 10; i += 1) {
+    await new Promise<void>(resolve => later(resolve, 5))
+  }
+}
+
+test('a turn reloads the controls only when the model changed', async ($, on) => {
+  mock.clock(on)
+  let model = 'claude-fable-5-2'
+  let lists = 0
+  on('command.register', () => ({ value: { command: 'flightdeck' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.model', () => ({ value: model }))
+  on('config.list', () => ((lists += 1), { value: [] }))
+  on('command.list', () => ({ value: [] }))
+  on('tool.list', () => ({ value: [] }))
+  on('env.get', () => ({ value: undefined }))
+  on('settings.read', () => ({ value: {} }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: false })
+  await settle()
+  const atStart = lists
+  await $.turn.start({ text: 'one', turnId: 'c1' })
+  await $.turn.start({ text: 'two', turnId: 'c2' })
+  await settle()
+  expect(lists).toBe(atStart)
+
+  model = 'claude-opus-5-5'
+  await $.turn.start({ text: 'three', turnId: 'c3' })
+  await settle()
+  expect(lists).toBe(atStart + 1)
+})
+
+test('a file edited many times in a response is one entry', async ($, on) => {
+  mock.clock(on)
+  on('fs.exists', (_, e) => ({ value: e.path === '/work/api-server/.git' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: EDIT_RESULT }))
+
+  await $.turn.start({ text: 'edit', turnId: 'm1' })
+  for (let n = 0; n < 3; n += 1) {
+    await $.tool.call({ tool: 'Edit', file_path: '/work/api-server/src/auth/session.ts', old_string: 'a', new_string: 'b' })
+  }
+  await $.turn.complete({ turnId: 'm1', answer: 'Edited.', durationMs: 1, isAborted: false, reason: 'answer' })
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /1 file$/ })).toBeDefined()
+  await ui.press({ key: 't-m1' })
+  expect(await ui.find({ type: 'Text', text: /^\+6$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the effort seen on requests is written to the store only when it changes', async ($, on) => {
+  let writes = 0
+  const stored: Record<string, unknown> = {}
+  on('session.model', () => ({ value: 'claude-fable-5-2' }))
+  on('config.list', () => ({ value: [] }))
+  on('command.list', () => ({ value: [] }))
+  on('env.get', () => ({ value: undefined }))
+  on('settings.read', () => ({ value: {} }))
+  on('classic.PostToolUse', () => ({}))
+  on('store.get', (_, e) => ({ value: stored[e.key] }))
+  on('store.set', (_, e) => ((writes += 1), (stored[e.key] = e.value), { value: undefined }))
+  on('store.delete', (_, e) => ((writes += 1), delete stored[e.key], { value: undefined }))
+
+  stored['effort:claude-fable-5-2'] = 'high'
+  await $.classic.PostToolUse({ effort: { level: 'high' } } as never)
+  await settle()
+  expect(writes).toBe(0)
+  await $.classic.PostToolUse({ effort: { level: 'max' } } as never)
+  await settle()
+  expect(writes).toBe(1)
+  expect(stored['effort:claude-fable-5-2']).toBe('max')
 })

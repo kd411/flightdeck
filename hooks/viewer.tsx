@@ -14,7 +14,7 @@ import type { DiffFile } from '../types'
 import { plain, sideBySide } from './diff'
 import type { Side, SideRow } from './diff'
 import { KIND_MARK, basename, clip } from './lib'
-import { changeDiffView, readDiffs, readDiffView, readTurns } from './state'
+import { changeDiffView, readDiffView, readTurnDiffs, readTurns } from './state'
 
 /** Rows the box spends on itself: border 2, title, tabs, rule, file, columns, footer. */
 const CHROME = 8
@@ -95,17 +95,14 @@ function tabWindow(
 
 export async function drawViewer($: EngineInterface, e: RenderInput<'AbovePrompt'>) {
   band.isCollapsed = e.props.isCollapsed
-  const [look, diffs, list] = await Promise.all([
-    readDiffView($),
-    readDiffs($),
-    readTurns($),
-  ])
+  // Closed, the band reads nothing else, so no other write redraws it.
+  const look = await readDiffView($)
   if (look.turn === null) {
     return null
   }
+  const [files, list] = await Promise.all([readTurnDiffs($, look.turn), readTurns($)])
 
   const { Box, Text, Button } = $.ui.resolve(e)
-  const files = diffs[look.turn] ?? []
   const turn = list.find(one => one.id === look.turn)
   const at = Math.min(Math.max(0, look.file), Math.max(0, files.length - 1))
   const file: DiffFile | undefined = files[at]

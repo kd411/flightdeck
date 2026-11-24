@@ -1,12 +1,11 @@
 // Everything that asks the engine for something: reading the session's
 // figures, changing the model or effort, finding a file's repository,
-// jumping to a response, and reading what changed in the working tree.
+// and jumping to a response.
 // Each read is guarded: a figure the engine cannot give is left as it was.
 
 import type { EngineInterface } from 'claude-code'
 
-import type { Category, ChangeKind, DiffFile, ExtKind, FileChange } from '../types'
-import { capHunks, hunksOfUnified } from './diff'
+import type { Category, ExtKind } from '../types'
 import { band } from './viewer'
 import {
   basename,
@@ -16,15 +15,21 @@ import {
   relative,
 } from './lib'
 import {
+  PANE,
   changeBreakdown,
   changeControls,
   changeDiffView,
   changeExtensions,
   changeMeter,
   changeView,
+  readControls,
+  readView,
 } from './state'
 
 type Engine = EngineInterface
+
+/** The session's commands, as `$.command.list()` resolves them. */
+type Commands = Awaited<ReturnType<Engine['command']['list']>>
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
 
@@ -64,12 +69,31 @@ export async function loadBreakdown($: Engine): Promise<void> {
   await changeBreakdown($, () => used)
 }
 
-/** Reads the model, the effort level and the ways a press can change them. */
-export async function loadControls($: Engine): Promise<void> {
+/**
+ * The breakdown again, only while someone can see it: the panel shown with
+ * its context section open. Unfolding the section reads it afresh.
+ */
+export async function loadBreakdownIfShown($: Engine): Promise<void> {
+  const [panes, look] = await Promise.all([attempt(() => $.ui.panes()), readView($)])
+  if (!look.isContextOpen || !(panes ?? []).some(pane => pane.id === PANE && pane.isShown)) {
+    return
+  }
+  await loadBreakdown($)
+}
+
+/**
+ * Reads the model, the effort level and the ways a press can change them.
+ * `listed` is a command list already asked for, so a caller that needs it
+ * too asks once.
+ */
+export async function loadControls(
+  $: Engine,
+  listed?: Promise<Commands | undefined>,
+): Promise<void> {
   const [model, rows, commands] = await Promise.all([
     attempt(() => $.session.model()),
     attempt(() => $.config.list()),
-    attempt(() => $.command.list()),
+    listed ?? attempt(() => $.command.list()),
   ])
   const found = await findEffort($)
   const modelRow = rows?.find(row => row.key === 'model' && !row.isLocked)
@@ -92,6 +116,21 @@ export async function loadControls($: Engine): Promise<void> {
     hasModelCommand: names.has('model'),
     hasEffortCommand,
   }))
+}
+
+/**
+ * The controls again, only when the session's model is not the one shown:
+ * `/model`, `/effort` and the panel's own presses reload them already.
+ */
+export async function refreshControls($: Engine): Promise<void> {
+  const [model, shown] = await Promise.all([
+    attempt(() => $.session.model()),
+    readControls($),
+  ])
+  if (model !== undefined && model === shown.model) {
+    return
+  }
+  await loadControls($)
 }
 
 /** Where the effort level in force was read from. */
@@ -132,8 +171,13 @@ function seenKey(model: string): string {
 export async function forgetRequestEffort($: Engine): Promise<void> {
   fromRequest = null
   const model = await attempt(() => $.session.model())
-  if (model !== undefined) {
-    await attempt(() => $.store.set(seenKey(model), null))
+  if (model === undefined) {
+    return
+  }
+  // The store is a file: write it only when there is a level to drop.
+  const key = seenKey(model)
+  if ((await attempt(() => $.store.get(key))) != null) {
+    await attempt(() => $.store.delete(key))
   }
 }
 
@@ -143,8 +187,13 @@ export async function sawRequestEffort($: Engine, level: string): Promise<void> 
   }
   fromRequest = level
   const model = await attempt(() => $.session.model())
-  if (model !== undefined) {
-    await attempt(() => $.store.set(seenKey(model), level))
+  if (model === undefined) {
+    return
+  }
+  // The store is a file: a level it already holds is not written again.
+  const key = seenKey(model)
+  if ((await attempt(() => $.store.get(key))) !== level) {
+    await attempt(() => $.store.set(key, level))
   }
 }
 
@@ -225,10 +274,13 @@ export async function describeControls($: Engine): Promise<string> {
 }
 
 /** Counts the connectors, plugins and MCP servers the session can use. */
-export async function loadAvailable($: Engine): Promise<void> {
+export async function loadAvailable(
+  $: Engine,
+  listed?: Promise<Commands | undefined>,
+): Promise<void> {
   const [tools, commands] = await Promise.all([
     attempt(() => $.tool.list()),
-    attempt(() => $.command.list()),
+    listed ?? attempt(() => $.command.list()),
   ])
   if (tools === undefined && commands === undefined) {
     return
@@ -379,192 +431,6 @@ export async function locate(
   }
 
   return { repo: basename(dirname(path)) || 'files', path: basename(path) }
-}
-
-/** The session repository's working tree at one moment. */
-export function parseNameStatus(
-  out: string,
-): Map<string, { kind: ChangeKind; from?: string }> {
-  const kinds = new Map<string, { kind: ChangeKind; from?: string }>()
-  const parts = out.split('\0')
-  for (let at = 0; at < parts.length; ) {
-    const status = parts[at] ?? ''
-    if (status === '') {
-      at += 1
-      continue
-    }
-    const letter = status[0]
-    if (letter === 'R' || letter === 'C') {
-      const from = parts[at + 1] ?? ''
-      const to = parts[at + 2] ?? ''
-      if (to !== '') {
-        kinds.set(to, letter === 'R' ? { kind: 'renamed', from } : { kind: 'added' })
-      }
-      at += 3
-      continue
-    }
-    const path = parts[at + 1] ?? ''
-    if (path !== '') {
-      kinds.set(path, {
-        kind: letter === 'A' ? 'added' : letter === 'D' ? 'deleted' : 'modified',
-      })
-    }
-    at += 2
-  }
-
-  return kinds
-}
-
-/** Reads `git diff --numstat -z -M`: lines added and removed per path. */
-export function parseNumstat(out: string): Map<string, { added: number; removed: number }> {
-  const counts = new Map<string, { added: number; removed: number }>()
-  const parts = out.split('\0')
-  for (let at = 0; at < parts.length; ) {
-    const head = parts[at] ?? ''
-    if (head === '') {
-      at += 1
-      continue
-    }
-    const [added, removed, path] = head.split('\t')
-    const lines = { added: Number(added) || 0, removed: Number(removed) || 0 }
-    if (path === '') {
-      // A rename: the old path and the new one follow.
-      const to = parts[at + 2] ?? ''
-      if (to !== '') {
-        counts.set(to, lines)
-      }
-      at += 3
-      continue
-    }
-    if (path !== undefined) {
-      counts.set(path, lines)
-    }
-    at += 1
-  }
-
-  return counts
-}
-
-/**
- * The session repository's whole working tree at one moment, as a git tree:
- * tracked and untracked files alike, ignored ones left out. Written with an
- * index of the mod's own, so the person's staging area is never touched.
- */
-export type Snapshot = { root: string; name: string; tree: string }
-
-const GIT = { timeoutMs: 4000 }
-const GIT_SLOW = { timeoutMs: 20000 }
-
-/** The index file the mod snapshots with, inside the repository's git dir. */
-async function indexFile($: Engine, root: string): Promise<string | null> {
-  const ran = await attempt(() =>
-    $.process.run(['git', '-C', root, 'rev-parse', '--git-path', 'flightdeck.index'], GIT),
-  )
-  const path = ran?.exitCode === 0 ? ran.stdout.trim() : ''
-  if (path === '') {
-    return null
-  }
-
-  return path.startsWith('/') ? path : `${root}/${path}`
-}
-
-/**
- * Snapshots the working tree: `git add -A` into the mod's own index, then
- * `git write-tree`. The index is kept between turns, so only files that
- * changed are hashed again. Null outside a repository or if git fails.
- */
-export async function snapshot($: Engine): Promise<Snapshot | null> {
-  const repo = await attempt(() => $.session.repo())
-  if (repo === undefined || repo === null) {
-    return null
-  }
-  const root = normalize(repo.root)
-  const index = await indexFile($, root)
-  if (index === null) {
-    return null
-  }
-  const env = { GIT_INDEX_FILE: index }
-  const added = await attempt(() =>
-    $.process.run(['git', '-C', root, 'add', '-A', '--', '.'], { ...GIT_SLOW, env }),
-  )
-  if (added === undefined || added.exitCode !== 0) {
-    return null
-  }
-  const written = await attempt(() =>
-    $.process.run(['git', '-C', root, 'write-tree'], { ...GIT, env }),
-  )
-  const tree = written?.exitCode === 0 ? written.stdout.trim() : ''
-
-  return tree === '' ? null : { root, name: basename(root), tree }
-}
-
-/**
- * Every file that changed between two snapshots, however it was changed:
- * added, modified, renamed or deleted, with exact line counts.
- */
-export async function changedBetween(
-  $: Engine,
-  before: Snapshot,
-  after: Snapshot,
-): Promise<FileChange[]> {
-  if (before.tree === after.tree || before.root !== after.root) {
-    return []
-  }
-  const range = [before.tree, after.tree]
-  const [status, numstat] = await Promise.all([
-    attempt(() =>
-      $.process.run(
-        ['git', '-C', after.root, 'diff-tree', '-r', '-z', '-M', '--name-status', ...range],
-        GIT,
-      ),
-    ),
-    attempt(() =>
-      $.process.run(
-        ['git', '-C', after.root, 'diff-tree', '-r', '-z', '-M', '--numstat', ...range],
-        GIT,
-      ),
-    ),
-  ])
-  const kinds = parseNameStatus(status?.exitCode === 0 ? status.stdout : '')
-  const counts = parseNumstat(numstat?.exitCode === 0 ? numstat.stdout : '')
-
-  return [...kinds.entries()].slice(0, 200).map(([path, how]) => ({
-    repo: after.name,
-    path,
-    ...(counts.get(path) ?? { added: 0, removed: 0 }),
-    kind: how.kind,
-    ...(how.from === undefined ? {} : { from: how.from }),
-  }))
-}
-
-/** One file's diff between two snapshots: exactly what the response did. */
-export async function gitDiff(
-  $: Engine,
-  before: Snapshot,
-  after: Snapshot,
-  change: FileChange,
-): Promise<DiffFile | null> {
-  const paths = change.from === undefined ? [change.path] : [change.from, change.path]
-  const ran = await attempt(() =>
-    $.process.run(
-      ['git', '-C', after.root, 'diff', '-M', '-U3', before.tree, after.tree, '--', ...paths],
-      GIT,
-    ),
-  )
-  if (ran === undefined || ran.exitCode !== 0 || ran.stdout.length > 400_000) {
-    return null
-  }
-  const capped = capHunks(hunksOfUnified(ran.stdout))
-
-  return {
-    repo: change.repo,
-    path: change.path,
-    kind: change.kind,
-    ...(change.from === undefined ? {} : { from: change.from }),
-    hunks: capped.hunks,
-    isCut: capped.isCut,
-    isSinceCommit: false,
-  }
 }
 
 /**

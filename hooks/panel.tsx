@@ -66,12 +66,13 @@ function shortLevel(level: string, isTight: boolean): string {
   return isTight && level === 'medium' ? 'med' : level
 }
 
+// The home folder, read once: it does not change while the mod runs.
+let homeDir: Promise<string | undefined> | null = null
+
 /** The session's directory, with the home folder written as `~`. */
 async function sessionPath($: EngineInterface): Promise<string> {
-  const [cwd, home] = await Promise.all([
-    $.session.cwd().catch(() => ''),
-    $.env.get('HOME').catch(() => undefined),
-  ])
+  homeDir ??= $.env.get('HOME').catch(() => undefined)
+  const [cwd, home] = await Promise.all([$.session.cwd().catch(() => ''), homeDir])
   if (typeof home === 'string' && home !== '' && (cwd === home || cwd.startsWith(home + '/'))) {
     return '~' + cwd.slice(home.length)
   }

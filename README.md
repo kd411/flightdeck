@@ -48,7 +48,7 @@ The panel's header names the mod and the directory the session runs in, with you
 
 ### 🎛️ Model & effort
 
-The model the session runs on, and the effort levels it offers with the one in force highlighted. Click the model to change it, or click a level to switch to it. The panel reads the level from each request, so it always shows what is really in use.
+The model the session runs on, and the effort levels it offers with the one in force highlighted. Click the model to change it, or click a level to switch to it. The panel reads the level Claude Code reports at each tool call and at the end of each response, so it shows what is really in use.
 
 <p align="center"><img src="docs/features/model-effort.svg" alt="The MODEL row showing claude-sonnet-5-5, and the EFFORT row with medium highlighted" width="480"></p>
 
@@ -159,10 +159,10 @@ Change these in `/config`:
 > **Flightdeck makes zero model calls and adds nothing to Claude's context.**
 
 - 📊 Usage, limits and context figures are the ones Claude Code already tracks.
-- 🧮 The context breakdown is estimated locally, with no request.
+- 🧮 The context breakdown is estimated locally, with no request, and only while the panel is shown with the breakdown open.
 - 📝 Chat titles and summaries come from the response's own text.
 - 🔒 It never changes your prompts, the system prompt or tool results.
-- 🏠 It sends nothing anywhere. On disk it keeps only the last effort level seen per model, and its own git index inside each repository it watches.
+- 🏠 It sends nothing anywhere. On disk it keeps only the last effort level seen per model, written only when that level changes. It runs no git and writes nothing to your repositories.
 
 ## 🧭 Limitations
 
@@ -174,7 +174,7 @@ Change these in `/config`:
 - **Plan usage** (5-hour and weekly) only exists on a Claude subscription. On API-key billing those rows are hidden.
 - **Model and effort clicks** use Claude Code's own settings. Where a setting cannot be changed from a mod, clicking the model opens the `/model` picker instead, and the effort row is hidden if no effort control is available.
 - **Jump to response** scrolls the fullscreen chat. A response that was cleared or compacted away cannot be reached.
-- **Files changed by shell commands** (a script, `sed`, a formatter) are found by snapshotting the session repository's working tree before and after each response. It uses git with an index file of its own (`.git/flightdeck.index`), so your staging area is never touched; the snapshots leave unreferenced objects that `git gc` clears. Shell edits in other repositories are not counted.
+- **Files changed by shell commands** (a script, `sed`, a formatter) are read from the per-command diff Claude Code records for each shell command, so the mod runs no git and writes nothing to your repository. Claude Code lists up to 200 files per command, with line diffs for the first few; the rest are counted without line figures. A move (`mv`) shows as a delete and an add, not a rename.
 - **The diff viewer** opens in the band above the prompt, which Claude Code caps at half the terminal's height; mods have no way to cover the whole chat. Claude Code also draws its own `[-]` beside the band, which folds it (`ctrl+x ctrl+a` unfolds it). Diffs are kept for the last 20 responses and the first 600 lines of each file.
 - **Repository names** come from the nearest `.git` folder above the file. A file outside any repository is listed under its folder name.
 - **Token figures in Extensions** are estimates, at about four characters a token, of the text each call brought into the conversation. A skill counts its instructions only the first time it loads in a session.
