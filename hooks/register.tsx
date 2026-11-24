@@ -16,19 +16,15 @@ import type { Register } from 'claude-code'
 
 import type { DiffFile, FileChange, Turn } from '../types'
 import { addDiff, capHunks, hunksOfNewFile, hunksOfPatch } from './diff'
-import type { Snapshot } from './engine'
 import {
-  changedBetween,
   describeControls,
   forgetRequestEffort,
   sawRequestEffort,
-  gitDiff,
   loadAvailable,
   loadControls,
   loadBreakdown,
   loadMeter,
   locate,
-  snapshot,
 } from './engine'
 import { EDIT_TOOLS, addTokens, classify, estimateTokens, firstSentence, firstWords, readEdit, tally } from './lib'
 import type { Mark } from './lib'
@@ -49,6 +45,9 @@ const TITLE = 'Flightdeck'
 const KEPT_TURNS = 50
 
 const KEPT_DIFFS = 20
+
+/** Files one shell command may add to a response. */
+const SHELL_FILES = 200
 
 /** Adds a response's diffs, keeping the latest responses' only. */
 async function keepDiff(
@@ -90,12 +89,8 @@ export const register: Register = (on, options) => {
   const isCompact = options.compactEdits !== false
   const isOpenOnStart = options.openOnStart !== false
 
-  // The main loop's turn in progress, its prompt, and its first reply row.
-  let live: {
-    id: string
-    anchor: string | null
-    before: Promise<Snapshot | null>
-  } | null = null
+  // The main loop's turn in progress and its first reply row.
+  let live: { id: string; anchor: string | null } | null = null
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -185,12 +180,7 @@ export const register: Register = (on, options) => {
     }
     skillMarks = null
     try {
-      live = {
-        id: e.turnId,
-        anchor: null,
-        // Not awaited: the turn does not wait on git.
-        before: snapshot($).catch(() => null),
-      }
+      live = { id: e.turnId, anchor: null }
       const turn: Turn = {
         id: e.turnId,
         title: firstWords(e.text) || 'Response',
@@ -265,34 +255,59 @@ export const register: Register = (on, options) => {
       const marks = classify(tool, e)
       const turnId = live?.id
       const anchor = live?.anchor ?? null
-      let change: FileChange | null = null
-      let diff: DiffFile | null = null
+      const changes: FileChange[] = []
+      const diffs: DiffFile[] = []
 
       if (EDIT_TOOLS.includes(tool) && ran.deny === undefined && !ran.isError) {
         const input = e as { file_path?: unknown; notebook_path?: unknown }
         const file = input.file_path ?? input.notebook_path
         const edit = readEdit(ran.result)
         if (typeof file === 'string' && edit !== null) {
-          change = {
+          const change: FileChange = {
             ...(await locate($, file)),
             added: edit.added,
             removed: edit.removed,
             kind: edit.isNew ? 'added' : 'modified',
           }
+          changes.push(change)
           const result = (ran.result ?? {}) as { structuredPatch?: unknown; content?: unknown }
           let hunks = hunksOfPatch(result.structuredPatch)
           if (hunks.length === 0 && edit.isNew && typeof result.content === 'string') {
             hunks = hunksOfNewFile(result.content)
           }
           const capped = capHunks(hunks)
-          diff = {
+          diffs.push({
             repo: change.repo,
             path: change.path,
             kind: change.kind,
             hunks: capped.hunks,
             isCut: capped.isCut,
             isSinceCommit: false,
+          })
+        }
+      } else if (tool === 'Bash' && ran.deny === undefined) {
+        // What the command changed, as Claude Code recorded it: no git of
+        // our own, so nothing is written to the repository.
+        const shell = shellChanges(ran.result)
+        for (const file of shell?.files.slice(0, SHELL_FILES) ?? []) {
+          if (file.path === '') {
+            continue
           }
+          const place = await locate($, file.path)
+          const kind = file.isGone ? 'deleted' : file.isNew ? 'added' : 'modified'
+          changes.push({ ...place, added: file.added, removed: file.removed, kind })
+          const capped = capHunks(file.hunks)
+          diffs.push({
+            ...place,
+            kind,
+            hunks: capped.hunks,
+            isCut: capped.isCut,
+            isSinceCommit: false,
+          })
+        }
+        const room = Math.max(0, SHELL_FILES - changes.length)
+        for (const path of shell?.others.slice(0, room) ?? []) {
+          changes.push({ ...(await locate($, path)), added: 0, removed: 0, kind: 'modified' })
         }
       }
 
@@ -313,14 +328,14 @@ export const register: Register = (on, options) => {
             return {
               ...one,
               anchors: [...anchors],
-              files: change === null ? one.files : [...one.files, change],
+              files: changes.length === 0 ? one.files : [...one.files, ...changes],
               uses: tally(one.uses, marks),
             }
           }),
         )
       }
-      if (turnId !== undefined && diff !== null) {
-        await keepDiff($, turnId, [diff])
+      if (turnId !== undefined) {
+        await keepDiff($, turnId, diffs)
       }
       if (marks.some(mark => mark.kind !== 'tool')) {
         // What the call brought in: its result as the model reads it, and
@@ -361,8 +376,6 @@ export const register: Register = (on, options) => {
               usage.cache_creation_input_tokens +
               usage.output_tokens
         const anchor = live?.id === e.turnId ? live.anchor : null
-        const before = live?.id === e.turnId ? live.before : null
-        let done: Turn | undefined
         await changeTurns($, list =>
           list.map(one => {
             if (one.id !== e.turnId) {
@@ -372,7 +385,7 @@ export const register: Register = (on, options) => {
               anchor === null || one.anchors.includes(anchor)
                 ? one.anchors
                 : [anchor, ...one.anchors]
-            done = {
+            return {
               ...one,
               anchors,
               tokens: spent,
@@ -380,8 +393,6 @@ export const register: Register = (on, options) => {
               title: firstWords(e.answer) || one.title,
               summary: firstSentence(e.answer),
             }
-
-            return done
           }),
         )
         if (live?.id === e.turnId) {
@@ -389,35 +400,6 @@ export const register: Register = (on, options) => {
         }
         // Local estimate: keeps the open component list current for free.
         void loadBreakdown($).catch(() => {})
-        if (done !== undefined) {
-          const turn: Turn = done
-          // After the turn, off its path: files changed by shell commands.
-          void (async () => {
-            let files = turn.files
-            const was = before === null ? null : await before
-            const now = was === null ? null : await snapshot($)
-            if (was !== null && now !== null) {
-              const known = new Set(files.map(file => `${file.repo}/${file.path}`))
-              const extra = (await changedBetween($, was, now)).filter(
-                file => !known.has(`${file.repo}/${file.path}`),
-              )
-              if (extra.length > 0) {
-                files = [...files, ...extra]
-                await changeTurns($, list =>
-                  list.map(one => (one.id === turn.id ? { ...one, files } : one)),
-                )
-                const read = await Promise.all(
-                  extra.slice(0, 20).map(file => gitDiff($, was, now, file)),
-                )
-                await keepDiff(
-                  $,
-                  turn.id,
-                  read.filter((one): one is DiffFile => one !== null),
-                )
-              }
-            }
-          })().catch(() => {})
-        }
       }
     } catch {
       // The history misses this turn's figures; the turn's end stands.

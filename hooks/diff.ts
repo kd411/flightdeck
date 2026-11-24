@@ -1,5 +1,5 @@
-// Diffs as the viewer needs them: hunks read from an edit tool's result or
-// from git's output, and laid out side by side. Pure, so all of it is
+// Diffs as the viewer needs them: hunks read from an edit tool's or a shell
+// command's result, and laid out side by side. Pure, so all of it is
 // testable without an engine.
 
 import type { DiffFile, DiffHunk } from '../types'
@@ -37,26 +37,6 @@ export function hunksOfNewFile(content: string): DiffHunk[] {
   const lines = content.replace(/\n$/, '').split('\n')
 
   return [{ oldStart: 0, newStart: 1, lines: lines.map(line => '+' + line) }]
-}
-
-/** Hunks from git's unified diff text. */
-export function hunksOfUnified(text: string): DiffHunk[] {
-  const hunks: DiffHunk[] = []
-  let current: DiffHunk | null = null
-  for (const line of text.split('\n')) {
-    const head = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line)
-    if (head !== null) {
-      current = { oldStart: Number(head[1]), newStart: Number(head[2]), lines: [] }
-      hunks.push(current)
-    } else if (
-      current !== null &&
-      (line.startsWith(' ') || line.startsWith('+') || line.startsWith('-'))
-    ) {
-      current.lines.push(line)
-    }
-  }
-
-  return hunks
 }
 
 /** Keeps at most `MAX_LINES` lines across a file's hunks. */
