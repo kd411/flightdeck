@@ -4,9 +4,10 @@
 
 import type { DiffFile, DiffHunk } from '../types'
 
-/** Lines kept per file, and files kept per response. */
+/** Lines kept per file, files kept per response, and characters kept per line. */
 export const MAX_LINES = 600
 export const MAX_FILES = 40
+export const MAX_LINE_CHARS = 500
 
 type PatchHunk = { oldStart?: unknown; newStart?: unknown; lines?: unknown }
 
@@ -34,7 +35,8 @@ export function hunksOfNewFile(content: string): DiffHunk[] {
   if (content === '') {
     return []
   }
-  const lines = content.replace(/\n$/, '').split('\n')
+  // One line past the cap, so capHunks still marks the file cut.
+  const lines = content.replace(/\n$/, '').split('\n', MAX_LINES + 1)
 
   return [{ oldStart: 0, newStart: 1, lines: lines.map(line => '+' + line) }]
 }
@@ -50,11 +52,16 @@ export function capHunks(hunks: readonly DiffHunk[]): {
     if (left <= 0) {
       return { hunks: kept, isCut: true }
     }
-    kept.push({ ...hunk, lines: hunk.lines.slice(0, left) })
+    kept.push({ ...hunk, lines: hunk.lines.slice(0, left).map(clipLine) })
     left -= hunk.lines.length
   }
 
   return { hunks: kept, isCut: left < 0 }
+}
+
+/** A line cut to MAX_LINE_CHARS after its mark: the viewer shows half a screen. */
+function clipLine(line: string): string {
+  return line.length <= MAX_LINE_CHARS + 1 ? line : line.slice(0, MAX_LINE_CHARS + 1) + '…'
 }
 
 /** Adds one change to a response's diffs, merging edits of the same file. */

@@ -2,7 +2,7 @@
 // reload. Change a `shape` tag whenever its value's fields change: the tag
 // declines what an earlier version stored.
 
-import { atom, read, update } from 'claude-code'
+import { atom, memberOf, read, update } from 'claude-code'
 import type { EngineInterface } from 'claude-code'
 
 import type {
@@ -70,10 +70,18 @@ const controls = atom(
   { shape: 'controls-1' },
 )
 
-const diffs = atom(
-  { plugin: 'flightdeck', key: 'diffs' } as const,
-  {},
-  { shape: 'diffs-1' },
+// One member per response, so adding an edit's diff rewrites that
+// response's diffs alone, and the viewer reads only the one it shows.
+const turnDiffs = atom(
+  { plugin: 'flightdeck', key: 'turnDiffs' } as const,
+  [],
+  { shape: 'turndiffs-1' },
+)
+
+const diffTurns = atom(
+  { plugin: 'flightdeck', key: 'diffTurns' } as const,
+  [],
+  { shape: 'diffturns-1' },
 )
 
 const diffView = atom(
@@ -136,14 +144,19 @@ export function changeControls($: Engine, change: (value: Controls) => Controls)
   return update($, controls, change)
 }
 
-export function readDiffs($: Engine) {
-  return read($, diffs)
+export function readTurnDiffs($: Engine, turnId: string) {
+  return read($, memberOf(turnDiffs, { requestId: turnId }))
 }
-export function changeDiffs(
+export function changeTurnDiffs(
   $: Engine,
-  change: (value: Record<string, DiffFile[]>) => Record<string, DiffFile[]>,
+  turnId: string,
+  change: (value: DiffFile[]) => DiffFile[],
 ) {
-  return update($, diffs, change)
+  return update($, memberOf(turnDiffs, { requestId: turnId }), change)
+}
+
+export function changeDiffTurns($: Engine, change: (value: string[]) => string[]) {
+  return update($, diffTurns, change)
 }
 
 export function readDiffView($: Engine) {

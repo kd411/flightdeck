@@ -11,7 +11,7 @@ import {
   kindCounts,
   mergeFiles,
 } from '../hooks/lib'
-import { addDiff, hunksOfNewFile, hunksOfPatch, sideBySide } from '../hooks/diff'
+import { MAX_LINE_CHARS, MAX_LINES, addDiff, capHunks, hunksOfNewFile, hunksOfPatch, sideBySide } from '../hooks/diff'
 import { shellChanges } from '../hooks/rows'
 import { movedTop } from '../hooks/viewer'
 
@@ -241,6 +241,16 @@ const BAND = {
   },
 } as const
 
+test('long diffs are cut by lines and by line length', () => {
+  const wide = capHunks([{ oldStart: 1, newStart: 1, lines: ['+' + 'x'.repeat(5000)] }])
+  expect(wide.hunks[0]?.lines[0]?.length).toBe(MAX_LINE_CHARS + 2)
+  expect(wide.hunks[0]?.lines[0]?.endsWith('…')).toBe(true)
+
+  const tall = capHunks(hunksOfNewFile(Array.from({ length: 5000 }, (_, i) => `l${i}`).join('\n')))
+  expect(tall.hunks[0]?.lines.length).toBe(MAX_LINES)
+  expect(tall.isCut).toBe(true)
+})
+
 test('the eye opens a side-by-side diff in the band above the prompt', async ($, on) => {
   mock.clock(on)
   on('fs.exists', (_, e) => ({ value: e.path === '/work/api-server/.git' }))
@@ -284,6 +294,34 @@ test('the eye opens a side-by-side diff in the band above the prompt', async ($,
   await row.press({ key: 'diff-close' })
   expect(await row.find({ type: 'Text', text: /Before/ })).toBeUndefined()
   await row.unmount()
+})
+
+test('diffs are kept for the last 20 responses only', async ($, on) => {
+  mock.clock(on)
+  on('fs.exists', (_, e) => ({ value: e.path === '/work/api-server/.git' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  on('turn.complete', (_, e) => ({ text: e.answer }))
+  on('tool.call', () => ({ result: EDIT_RESULT }))
+
+  for (let n = 1; n <= 21; n += 1) {
+    await $.turn.start({ text: 'edit', turnId: `k${n}` })
+    await $.tool.call({ tool: 'Edit', file_path: '/work/api-server/src/auth/session.ts', old_string: 'old', new_string: 'new' })
+    await $.turn.complete({ turnId: `k${n}`, answer: 'Done.', durationMs: 1, isAborted: false, reason: 'answer' })
+  }
+
+  const tallk1 = await $.ui.mount({ ...PANE, props: { ...PANE.props, scroll: { offset: 0, bodyRows: 100 } }, surface: 'terminal' })
+  await tallk1.press({ key: 'v-k1' })
+  await tallk1.unmount()
+  const gone = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await gone.find({ type: 'Text', text: /No diff was recorded/ })).toBeDefined()
+  await gone.unmount()
+
+  const tallk2 = await $.ui.mount({ ...PANE, props: { ...PANE.props, scroll: { offset: 0, bodyRows: 100 } }, surface: 'terminal' })
+  await tallk2.press({ key: 'v-k2' })
+  await tallk2.unmount()
+  const kept = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await kept.find({ type: 'Text', text: /^new$/ })).toBeDefined()
+  await kept.unmount()
 })
 
 test('the viewer scrolls its code rows under a header that stays put', async ($, on) => {

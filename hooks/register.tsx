@@ -34,7 +34,8 @@ import { drawEditRow, drawScriptRow, isScript, shellChanges, withoutShellDiff } 
 import {
   PANE,
   changeControls,
-  changeDiffs,
+  changeDiffTurns,
+  changeTurnDiffs,
   changeExtensions,
   changeMeter,
   changeTotals,
@@ -51,21 +52,25 @@ const SHELL_FILES = 200
 
 /** Adds a response's diffs, keeping the latest responses' only. */
 async function keepDiff(
-  $: Parameters<typeof changeDiffs>[0],
+  $: Parameters<typeof changeTurnDiffs>[0],
   turnId: string,
   files: readonly DiffFile[],
 ) {
   if (files.length === 0) {
     return
   }
-  await changeDiffs($, old => {
-    const next = { ...old, [turnId]: files.reduce(addDiff, old[turnId] ?? []) }
-    const ids = Object.keys(next)
+  await changeTurnDiffs($, turnId, old => files.reduce(addDiff, old))
+  let dropped: string[] = []
+  await changeDiffTurns($, old => {
+    const ids = old.includes(turnId) ? old : [...old, turnId]
+    dropped = ids.slice(0, Math.max(0, ids.length - KEPT_DIFFS))
 
-    return ids.length <= KEPT_DIFFS
-      ? next
-      : Object.fromEntries(ids.slice(-KEPT_DIFFS).map(id => [id, next[id] ?? []]))
+    return ids.slice(-KEPT_DIFFS)
   })
+  // The host holds a member until it is written: empty the dropped ones.
+  for (const id of dropped) {
+    await changeTurnDiffs($, id, () => [])
+  }
 }
 
 let seenEffort: string | null = null
@@ -142,8 +147,9 @@ export const register: Register = (on, options) => {
     }
   })
 
-  // The effort in force: read off each request, and off the engine's own
-  // hook events, whichever this build reports it on.
+  // The effort in force, as the engine's own hook events report it. Not read
+  // off `turn.step`: a hook there relays every streamed chunk of every
+  // request through the mod.
   on('classic.PostToolUse', ($, e, next) => {
     saw($, (e as { effort?: { level?: unknown } }).effort?.level)
 
@@ -153,13 +159,6 @@ export const register: Register = (on, options) => {
     saw($, (e as { effort?: { level?: unknown } }).effort?.level)
 
     return next(e)
-  })
-  on('turn.step', async function* ($, e, next) {
-    if (e.agentId === undefined) {
-      saw($, e.effort)
-    }
-
-    return yield* next(e)
   })
 
   // `/effort` and `/model` change what is in force: read it again at once,

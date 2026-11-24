@@ -112,7 +112,10 @@ declare module 'claude-code' {
       breakdown: Shaped<Category[]>
       extensions: Shaped<Extensions>
       controls: Shaped<Controls>
-      diffs: Shaped<Record<string, DiffFile[]>>
+      /** One response's diffs, by its turn id. */
+      turnDiffs: StateFamily<Shaped<DiffFile[]>>
+      /** The turns whose diffs are kept, oldest first. */
+      diffTurns: Shaped<string[]>
       diffView: Shaped<DiffView>
     }
   }
