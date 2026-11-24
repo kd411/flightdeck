@@ -1,6 +1,6 @@
 {
   "name": "flightdeck",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Flightdeck: a minimal developer HUD for Claude Code. Model and effort controls, usage and context meters, chat history with a side-by-side diff viewer, extension calls and token estimates, and compact rows for edits and shell commands.",
   "license": "MIT",
   "keywords": [
